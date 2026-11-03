@@ -27,6 +27,7 @@ def _fake_api(controller, current_system):
     response.raise_for_status = Mock()
     response.json = AsyncMock(return_value=current_system)
     api.aiohttp_session = Mock()
+    api.aiohttp_session.get.return_value = AsyncMock()
     api.aiohttp_session.get.return_value.__aenter__ = AsyncMock(
         return_value=response
     )
