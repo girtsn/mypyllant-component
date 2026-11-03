@@ -16,7 +16,7 @@ from homeassistant.helpers import selector
 
 from myPyllant import export, report
 
-from myPyllant.api import MyPyllantAPI
+from .controllerless_api import ControllerlessMyPyllantAPI
 from myPyllant.const import DEFAULT_BRAND
 from myPyllant.enums import DeviceDataBucketResolution
 from myPyllant.http_client import (
@@ -101,7 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {}
 
     _LOGGER.debug("Creating API and logging in with %s in realm %s", username, country)
-    api = MyPyllantAPI(
+    api = ControllerlessMyPyllantAPI(
         username=username, password=password, brand=brand, country=country
     )
     try:
