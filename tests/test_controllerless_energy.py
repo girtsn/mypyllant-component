@@ -19,6 +19,7 @@ def _fake_api(controller, current_system):
     api.control_identifiers = {"system-1": controller}
     api.get_control_identifier = AsyncMock(side_effect=ValueError(controller))
     api.get_api_base = AsyncMock(return_value="https://api.example.invalid")
+    api.get_authorized_headers = Mock(return_value={})
 
     home = SimpleNamespace(system_id="system-1", timezone=timezone.utc)
     api.get_homes = Mock(return_value=_homes(home))
