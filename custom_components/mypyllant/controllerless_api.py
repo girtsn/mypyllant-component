@@ -104,7 +104,7 @@ class ControllerlessMyPyllantAPI(MyPyllantAPI):
 
             generators = [
                 current_system.get("primary_heat_generator"),
-                *current_system.get("secondary_heat_generators", []),
+                *(current_system.get("secondary_heat_generators") or []),
             ]
             if not any(
                 isinstance(device, dict)
