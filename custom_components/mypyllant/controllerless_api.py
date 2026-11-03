@@ -75,10 +75,7 @@ class ControllerlessMyPyllantAPI(MyPyllantAPI):
 
         # An unsupported or absent controller must not hide EMF energy data.
         for home in controllerless_homes:
-            url = (
-                f"{await self.get_api_base()}/emf/v2/"
-                f"{home.system_id}/currentSystem"
-            )
+            url = f"{await self.get_api_base()}/emf/v2/{home.system_id}/currentSystem"
             try:
                 async with self.aiohttp_session.get(
                     url, headers=self.get_authorized_headers()

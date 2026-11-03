@@ -29,12 +29,8 @@ def _fake_api(controller, current_system):
     response.json = AsyncMock(return_value=current_system)
     api.aiohttp_session = Mock()
     api.aiohttp_session.get.return_value = AsyncMock()
-    api.aiohttp_session.get.return_value.__aenter__ = AsyncMock(
-        return_value=response
-    )
-    api.aiohttp_session.get.return_value.__aexit__ = AsyncMock(
-        return_value=False
-    )
+    api.aiohttp_session.get.return_value.__aenter__ = AsyncMock(return_value=response)
+    api.aiohttp_session.get.return_value.__aexit__ = AsyncMock(return_value=False)
     return api, home
 
 
@@ -70,15 +66,15 @@ async def test_controller_none_discovers_energy_devices():
 
     assert systems == [expected_system]
     api.aiohttp_session.get.assert_called_once()
-    assert "/emf/v2/system-1/currentSystem" in (
-        api.aiohttp_session.get.call_args.args[0]
+    assert (
+        "/emf/v2/system-1/currentSystem" in (api.aiohttp_session.get.call_args.args[0])
     )
     kwargs = make_system.call_args.kwargs
     assert kwargs["state"] == {}
     assert kwargs["configuration"] == {}
-    assert kwargs["current_system"]["primary_heat_generator"][
-        "device_uuid"
-    ] == "boiler-1"
+    assert (
+        kwargs["current_system"]["primary_heat_generator"]["device_uuid"] == "boiler-1"
+    )
 
 
 @pytest.mark.asyncio
