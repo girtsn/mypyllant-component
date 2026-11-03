@@ -36,6 +36,8 @@ jobs:
               raise SystemExit(f'Release version mismatch: {actual} != {expected}')
           print(f'Validated release {actual}')
           PY
+      - name: Show proposed formatting changes
+        run: uv run ruff format --diff custom_components/mypyllant/controllerless_api.py tests/test_controllerless_energy.py || true
       - name: Check formatting and lint
         run: uv run prek --all-files --skip pytest
       - name: Run tests
