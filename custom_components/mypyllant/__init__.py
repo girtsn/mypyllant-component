@@ -117,6 +117,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await system_coordinator.async_refresh()
     hass.data[DOMAIN][entry.entry_id]["system_coordinator"] = system_coordinator
 
+    controllerless = bool(
+        system_coordinator.data
+        and all(
+            system.control_identifier.is_unsupported
+            for system in system_coordinator.data
+        )
+    )
+    # Earlier releases could leave this unset, which fetches energy once only.
+    # Hourly collection must remain active even if obsolete daily sensors vanish.
+    if controllerless and not update_interval_daily:
+        update_interval_daily = 60 * 60
+
     # Daily data coordinator is fetched once by default (to get all entities), but not updated on a regular basis
     # to prevent quota errors
     daily_data_coordinator = DailyDataCoordinator(
@@ -129,10 +141,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await daily_data_coordinator.async_refresh()
     hass.data[DOMAIN][entry.entry_id]["daily_data_coordinator"] = daily_data_coordinator
 
-    controllerless = bool(
-        system_coordinator.data
-        and all(system.control_identifier.is_unsupported for system in system_coordinator.data)
-    )
     # No Tado/OpenTherm control operations are offered as Vaillant controls:
     # the VR 921 EMF endpoint exposes energy data but not controller controls.
     active_platforms = [Platform.SENSOR] if controllerless else PLATFORMS
