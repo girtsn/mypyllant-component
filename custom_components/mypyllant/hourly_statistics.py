@@ -3,6 +3,7 @@
 Keep exactly the same external statistic IDs as the previous release.
 No duplicate daily Home Assistant energy counters are registered.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,7 +22,10 @@ SUPPORTED_PROFILES = {
     ("CONSUMED_PRIMARY_ENERGY", "HEATING"): "Vaillant Gas Heating",
     ("CONSUMED_PRIMARY_ENERGY", "DOMESTIC_HOT_WATER"): "Vaillant Gas Hot Water",
     ("CONSUMED_ELECTRICAL_ENERGY", "HEATING"): "Vaillant Electricity Heating",
-    ("CONSUMED_ELECTRICAL_ENERGY", "DOMESTIC_HOT_WATER"): "Vaillant Electricity Hot Water",
+    (
+        "CONSUMED_ELECTRICAL_ENERGY",
+        "DOMESTIC_HOT_WATER",
+    ): "Vaillant Electricity Hot Water",
 }
 
 
@@ -64,7 +68,10 @@ class HourlyStatisticsManager:
         for system_id, system_data in (self.coordinator.data or {}).items():
             for device_index, data_set in enumerate(system_data["devices_data"]):
                 for data_index, data in enumerate(data_set):
-                    if (data.energy_type, data.operation_mode) not in SUPPORTED_PROFILES:
+                    if (
+                        data.energy_type,
+                        data.operation_mode,
+                    ) not in SUPPORTED_PROFILES:
                         continue
                     publisher = _StatisticsOnlyPublisher(
                         system_id, device_index, data_index, self.coordinator

@@ -1,4 +1,5 @@
 """Regression tests for controllerless hourly-only Vaillant statistics."""
+
 from unittest.mock import AsyncMock, patch
 
 from custom_components.mypyllant.const import DOMAIN

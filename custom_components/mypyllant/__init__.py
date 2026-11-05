@@ -148,9 +148,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, active_platforms)
 
     if controllerless:
-        manager = HourlyStatisticsManager(
-            hass, daily_data_coordinator, entry.entry_id
-        )
+        manager = HourlyStatisticsManager(hass, daily_data_coordinator, entry.entry_id)
         hass.data[DOMAIN][entry.entry_id]["hourly_statistics_manager"] = manager
         await manager.async_start()
         manager.remove_legacy_daily_entities()
