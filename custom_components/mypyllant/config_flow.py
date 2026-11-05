@@ -107,6 +107,23 @@ DATA_SCHEMA = vol.Schema(
     },
 )
 
+# A controllerless Vaillant boiler exposes read-only EMF energy statistics.
+# Heating modes, schedules, comfort controls, and controller diagnostics are
+# owned by tado/OpenTherm and are not available through this gateway.
+CONTROLLERLESS_OPTIONS_SCHEMA = vol.Schema(
+    {
+        vol.Required(
+            OPTION_UPDATE_INTERVAL,
+            default=DEFAULT_UPDATE_INTERVAL,
+        ): positive_int,
+        vol.Required(
+            OPTION_UPDATE_INTERVAL_DAILY,
+            default=60 * 60,
+        ): positive_int,
+    }
+)
+
+
 OPTIONS_SCHEMA = vol.Schema(
     {
         vol.Required(
@@ -194,10 +211,24 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
+        system_data = (
+            self.hass.data.get(DOMAIN, {})
+            .get(self.config_entry.entry_id, {})
+            .get("system_coordinator")
+        )
+        controllerless = bool(
+            system_data
+            and system_data.data
+            and all(
+                system.control_identifier.is_unsupported
+                for system in system_data.data
+            )
+        )
+        schema = CONTROLLERLESS_OPTIONS_SCHEMA if controllerless else OPTIONS_SCHEMA
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
-                OPTIONS_SCHEMA, self.config_entry.options
+                schema, self.config_entry.options
             ),
         )
 
