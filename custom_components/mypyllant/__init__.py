@@ -39,6 +39,7 @@ from .const import (
     DEFAULT_UPDATE_INTERVAL_DAILY,
 )
 from .coordinator import SystemCoordinator, DailyDataCoordinator
+from .hourly_statistics import HourlyStatisticsManager
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -128,7 +129,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await daily_data_coordinator.async_refresh()
     hass.data[DOMAIN][entry.entry_id]["daily_data_coordinator"] = daily_data_coordinator
 
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    controllerless = bool(
+        system_coordinator.data
+        and all(system.control_identifier.is_unsupported for system in system_coordinator.data)
+    )
+    # No Tado/OpenTherm control operations are offered as Vaillant controls:
+    # the VR 921 EMF endpoint exposes energy data but not controller controls.
+    active_platforms = [Platform.SENSOR] if controllerless else PLATFORMS
+    hass.data[DOMAIN][entry.entry_id]["platforms"] = active_platforms
+    await hass.config_entries.async_forward_entry_setups(entry, active_platforms)
+
+    if controllerless:
+        manager = HourlyStatisticsManager(
+            hass, daily_data_coordinator, entry.entry_id
+        )
+        hass.data[DOMAIN][entry.entry_id]["hourly_statistics_manager"] = manager
+        await manager.async_start()
+        manager.remove_legacy_daily_entities()
 
     async def handle_export(call: ServiceCall) -> ServiceResponse:
         _LOGGER.debug("Exporting data with params %s", call.data)
@@ -208,8 +225,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    data = hass.data[DOMAIN][entry.entry_id]
+    active_platforms = data.get("platforms", PLATFORMS)
+    unload_ok = await hass.config_entries.async_unload_platforms(
+        entry, active_platforms
+    )
     if unload_ok:
+        if manager := data.get("hourly_statistics_manager"):
+            await manager.async_stop()
         await hass.data[DOMAIN][entry.entry_id][
             "system_coordinator"
         ].api.aiohttp_session.close()
