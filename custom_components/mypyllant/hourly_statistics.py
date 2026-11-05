@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 
 from .coordinator import DailyDataCoordinator
@@ -32,8 +32,11 @@ class _StatisticsOnlyPublisher(DataSensor):
     def name(self) -> str:
         if (data := self.device_data) is None:
             return "Vaillant Energy"
+        energy_type = data.energy_type
+        if energy_type is None:
+            return "Vaillant Energy"
         return SUPPORTED_PROFILES.get(
-            (data.energy_type, data.operation_mode), "Vaillant Energy"
+            (energy_type, data.operation_mode), "Vaillant Energy"
         )
 
 
@@ -50,7 +53,7 @@ class HourlyStatisticsManager:
         self.coordinator = coordinator
         self.entry_id = entry_id
         self._lock = asyncio.Lock()
-        self._unsubscribe = None
+        self._unsubscribe: CALLBACK_TYPE | None = None
         self._tasks: set[asyncio.Task] = set()
         self._publishers: list[_StatisticsOnlyPublisher] = []
         self._profile_ids: set[str] = set()
