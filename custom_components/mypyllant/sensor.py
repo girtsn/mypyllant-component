@@ -65,6 +65,41 @@ async def create_system_sensors(
 
     sensors: EntityList[SensorEntity] = EntityList()
     _LOGGER.debug("Creating system sensors for %s", system_coordinator.data)
+    # The controllerless ecoTEC / OpenTherm setup offers reliable EMF energy
+    # profiles, but no Vaillant zone, schedule, or tank-control endpoints.
+    # Only expose firmware, supported device diagnostics and request count.
+    if all(
+        system.control_identifier.is_unsupported for system in system_coordinator.data
+    ):
+        sensors.append(lambda: SystemAPIRequestCount(system_coordinator))
+        for system_index, system in enumerate(system_coordinator.data):
+            sensors.append(lambda i=system_index: HomeEntity(i, system_coordinator))
+            for device_index, device in enumerate(system.devices):
+                if "water_pressure" in device.operational_data:
+                    sensors.append(
+                        lambda i=system_index, j=device_index: (
+                            SystemDeviceWaterPressureSensor(i, j, system_coordinator)
+                        )
+                    )
+                if device.operation_time is not None:
+                    sensors.append(
+                        lambda i=system_index, j=device_index: (
+                            SystemDeviceOperationTimeSensor(i, j, system_coordinator)
+                        )
+                    )
+                if device.on_off_cycles is not None:
+                    sensors.append(
+                        lambda i=system_index, j=device_index: (
+                            SystemDeviceOnOffCyclesSensor(i, j, system_coordinator)
+                        )
+                    )
+                if device.current_power is not None:
+                    sensors.append(
+                        lambda i=system_index, j=device_index: (
+                            SystemDeviceCurrentPowerSensor(i, j, system_coordinator)
+                        )
+                    )
+        return sensors
     sensors.append(lambda: SystemAPIRequestCount(system_coordinator))
     for index, system in enumerate(system_coordinator.data):
         if system.outdoor_temperature is not None:
@@ -278,8 +313,9 @@ async def create_daily_data_sensors(
 async def async_setup_entry(
     hass: HomeAssistant, config: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
+    # The four energy series are published as external mypyllant:* statistics
+    # by HourlyStatisticsManager, not as duplicate daily-reset sensor entities.
     async_add_entities(await create_system_sensors(hass, config))  # type: ignore
-    async_add_entities(await create_daily_data_sensors(hass, config))  # type: ignore
 
 
 class SystemSensor(SystemCoordinatorEntity, SensorEntity):

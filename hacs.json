@@ -1,5 +1,5 @@
 {
-  "name": "MyVaillant",
+  "name": "Vaillant Boiler Monitor",
   "render_readme": true,
   "homeassistant": "2026.3.0",
   "zip_release": true,

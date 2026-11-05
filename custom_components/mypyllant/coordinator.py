@@ -10,7 +10,6 @@ from aiohttp import ClientResponseError
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
-from homeassistant.helpers import entity_registry as er
 
 from custom_components.mypyllant.const import (
     DOMAIN,
@@ -345,17 +344,6 @@ class SystemWithDeviceData(TypedDict):
 class DailyDataCoordinator(MyPyllantCoordinator):
     data: dict[str, SystemWithDeviceData]
 
-    async def is_sensor_disabled(self, unique_id: str) -> bool:
-        """
-        Check if a sensor is disabled to be able to skip its API update
-        """
-        entity_registry = er.async_get(self.hass)
-        entity_id = entity_registry.async_get_entity_id("sensor", DOMAIN, unique_id)
-        if entity_id:
-            entity_entry = entity_registry.async_get(entity_id)
-            return entity_entry is not None and bool(entity_entry.disabled)
-        return False
-
     async def _async_update_data(self) -> dict[str, SystemWithDeviceData]:
         self._raise_if_quota_hit()
         _LOGGER.debug("Starting async update data for DailyDataCoordinator")
@@ -394,10 +382,19 @@ class DailyDataCoordinator(MyPyllantCoordinator):
                     "devices_data": [],
                 }
                 for de_index, device in enumerate(system.devices):
-                    for da_index, dd in enumerate(device.data):
-                        sensor_id = f"{DOMAIN}_{device.system_id}_{device.device_uuid}_{da_index}_{de_index}"
-                        if await self.is_sensor_disabled(sensor_id):
-                            device.data[da_index].skip_data_update = True
+                    # Fetch only the four recorder energy profiles. Never use
+                    # obsolete sensor enabled/disabled flags to suppress data:
+                    # the visible daily sensors have been removed.
+                    for dd in device.data:
+                        dd.skip_data_update = (
+                            dd.energy_type,
+                            dd.operation_mode,
+                        ) not in {
+                            ("CONSUMED_PRIMARY_ENERGY", "HEATING"),
+                            ("CONSUMED_PRIMARY_ENERGY", "DOMESTIC_HOT_WATER"),
+                            ("CONSUMED_ELECTRICAL_ENERGY", "HEATING"),
+                            ("CONSUMED_ELECTRICAL_ENERGY", "DOMESTIC_HOT_WATER"),
+                        }
                     device_data = self.api.get_data_by_device(
                         device, DeviceDataBucketResolution.HOUR, start, end
                     )

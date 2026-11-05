@@ -10,18 +10,16 @@
         "data": {
           "password": "Password",
           "username": "Email Address",
-          "country": "Country",
-          "brand": "Brand"
+          "country": "Country"
         },
-        "title": "Login Information",
-        "description": "Same as myVAILLANT app"
+        "title": "Vaillant Boiler Monitor login",
+        "description": "Read-only monitoring; use the same account as the myVAILLANT app"
       },
       "reauth_confirm": {
         "data": {
           "password": "Password",
           "username": "Username",
-          "country": "Country",
-          "brand": "Brand"
+          "country": "Country"
         },
         "title": "Reauthenticate to myVAILLANT",
         "description": "Same as myVAILLANT app"
@@ -30,8 +28,7 @@
         "data": {
           "password": "Password",
           "username": "Username",
-          "country": "Country",
-          "brand": "Brand"
+          "country": "Country"
         },
         "title": "Reconfigure myVAILLANT",
         "description": "Same as myVAILLANT app"
@@ -66,25 +63,8 @@
     "step": {
       "init": {
         "data": {
-          "update_interval": "Seconds between live data updates (lowering risks 'quota exceeded' errors and temporary bans)",
-          "update_interval_daily": "Seconds between energy data updates (lowering risks 'quota exceeded' errors and temporary bans)",
-          "refresh_delay": "Delay in seconds before refreshing data after updates",
-          "quick_veto_duration": "Default duration in hours for quick veto",
-          "holiday_duration": "Default duration in days for away mode",
-          "time_program_overwrite": "Temperature controls overwrite time program instead of setting quick veto",
-          "default_holiday_setpoint": "Default temperature setpoint for away mode",
-          "manual_cooling_duration": "Default duration for manual cooling in days",
-          "dhw_legionella_protection_temperature": "Temperature above which legionella protection is considered active",
-          "country": "Country",
-          "brand": "Brand",
-          "fetch_rts": "Fetch real-time statistics (not supported on every system)",
-          "fetch_mpc": "Fetch real-time power usage (not supported on every system)",
-          "fetch_connection_status": "Fetch system connection status",
-          "fetch_dtc": "Fetch diagnostic trouble codes",
-          "fetch_ambisense_capability": "Fetch Ambisense Capability",
-          "fetch_ambisense_rooms": "Fetch Ambisense Room Thermostats",
-          "fetch_energy_management": "Fetch Energy Management Data",
-          "fetch_eebus": "Fetch EEBUS Data"
+          "update_interval": "Seconds between general monitoring updates (recommended: 1800)",
+          "update_interval_daily": "Seconds between hourly energy updates (recommended: 3600)"
         }
       }
     }

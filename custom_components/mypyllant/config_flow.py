@@ -18,50 +18,16 @@ from myPyllant.http_client import (
     LoginEndpointInvalid,
     RealmInvalid,
 )
-from myPyllant.const import (
-    BRANDS,
-    COUNTRIES,
-    DEFAULT_BRAND,
-    DEFAULT_QUICK_VETO_DURATION,
-    DEFAULT_HOLIDAY_DURATION,
-)
+from myPyllant.const import COUNTRIES, DEFAULT_BRAND
 from . import OPTION_UPDATE_INTERVAL_DAILY
-
 from .const import (
-    DEFAULT_REFRESH_DELAY,
-    DEFAULT_TIME_PROGRAM_OVERWRITE,
     DEFAULT_UPDATE_INTERVAL,
     DOMAIN,
     OPTION_BRAND,
     OPTION_COUNTRY,
-    OPTION_DEFAULT_QUICK_VETO_DURATION,
-    OPTION_REFRESH_DELAY,
-    OPTION_TIME_PROGRAM_OVERWRITE,
     OPTION_UPDATE_INTERVAL,
-    OPTION_DEFAULT_HOLIDAY_DURATION,
-    OPTION_DEFAULT_HOLIDAY_SETPOINT,
-    DEFAULT_HOLIDAY_SETPOINT,
-    OPTION_FETCH_RTS,
-    DEFAULT_FETCH_RTS,
-    OPTION_FETCH_MPC,
-    DEFAULT_FETCH_MPC,
-    OPTION_FETCH_AMBISENSE_ROOMS,
-    DEFAULT_FETCH_AMBISENSE_ROOMS,
-    OPTION_FETCH_ENERGY_MANAGEMENT,
-    DEFAULT_FETCH_ENERGY_MANAGEMENT,
-    OPTION_FETCH_EEBUS,
-    DEFAULT_FETCH_EEBUS,
-    OPTION_DEFAULT_MANUAL_COOLING_DURATION,
-    DEFAULT_MANUAL_COOLING_DURATION,
-    OPTION_DEFAULT_DHW_LEGIONELLA_PROTECTION_TEMPERATURE,
-    DEFAULT_DHW_LEGIONELLA_PROTECTION_TEMPERATURE,
-    OPTION_FETCH_CONNECTION_STATUS,
-    DEFAULT_FETCH_CONNECTION_STATUS,
-    OPTION_FETCH_DTC,
-    DEFAULT_FETCH_DTC,
-    OPTION_FETCH_AMBISENSE_CAPABILITY,
-    DEFAULT_FETCH_AMBISENSE_CAPABILITY,
 )
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -81,23 +47,12 @@ _COUNTRIES_OPTIONS = [
     selector.SelectOptionDict(value=k, label=v)
     for k, v in COUNTRIES[DEFAULT_BRAND].items()
 ]
-_BRANDS_OPTIONS = [
-    selector.SelectOptionDict(value=k, label=v) for k, v in BRANDS.items()
-]
+
 
 DATA_SCHEMA = vol.Schema(
     {
         vol.Required("username"): str,
         vol.Required("password"): str,
-        vol.Required(
-            OPTION_BRAND,
-            default=DEFAULT_BRAND,
-        ): selector.SelectSelector(
-            selector.SelectSelectorConfig(
-                options=_BRANDS_OPTIONS,
-                mode=selector.SelectSelectorMode.LIST,
-            ),
-        ),
         vol.Optional(OPTION_COUNTRY): selector.SelectSelector(
             selector.SelectSelectorConfig(
                 options=_COUNTRIES_OPTIONS,
@@ -107,81 +62,25 @@ DATA_SCHEMA = vol.Schema(
     },
 )
 
+# No controller-only or OpenTherm control options: these are read-only
+# Vaillant cloud energy and device diagnostics, not Tado thermostat controls.
 OPTIONS_SCHEMA = vol.Schema(
     {
         vol.Required(
             OPTION_UPDATE_INTERVAL,
             default=DEFAULT_UPDATE_INTERVAL,
         ): positive_int,
-        vol.Optional(
+        vol.Required(
             OPTION_UPDATE_INTERVAL_DAILY,
+            default=60 * 60,
         ): positive_int,
-        vol.Required(
-            OPTION_REFRESH_DELAY,
-            default=DEFAULT_REFRESH_DELAY,
-        ): positive_int,
-        vol.Required(
-            OPTION_DEFAULT_QUICK_VETO_DURATION,
-            default=DEFAULT_QUICK_VETO_DURATION,
-        ): positive_int,
-        vol.Required(
-            OPTION_DEFAULT_HOLIDAY_DURATION,
-            default=DEFAULT_HOLIDAY_DURATION,
-        ): positive_int,
-        vol.Required(
-            OPTION_DEFAULT_HOLIDAY_SETPOINT,
-            default=DEFAULT_HOLIDAY_SETPOINT,
-        ): vol.All(vol.Coerce(float), vol.Clamp(min=0, max=30)),
-        vol.Required(
-            OPTION_DEFAULT_MANUAL_COOLING_DURATION,
-            default=DEFAULT_MANUAL_COOLING_DURATION,
-        ): positive_int,
-        vol.Required(
-            OPTION_TIME_PROGRAM_OVERWRITE,
-            default=DEFAULT_TIME_PROGRAM_OVERWRITE,
-        ): bool,
-        vol.Required(
-            OPTION_DEFAULT_DHW_LEGIONELLA_PROTECTION_TEMPERATURE,
-            default=DEFAULT_DHW_LEGIONELLA_PROTECTION_TEMPERATURE,
-        ): vol.All(vol.Coerce(float), vol.Clamp(min=0, max=100)),
-        vol.Required(
-            OPTION_FETCH_RTS,
-            default=DEFAULT_FETCH_RTS,
-        ): bool,
-        vol.Required(
-            OPTION_FETCH_MPC,
-            default=DEFAULT_FETCH_MPC,
-        ): bool,
-        vol.Required(
-            OPTION_FETCH_CONNECTION_STATUS,
-            default=DEFAULT_FETCH_CONNECTION_STATUS,
-        ): bool,
-        vol.Required(
-            OPTION_FETCH_DTC,
-            default=DEFAULT_FETCH_DTC,
-        ): bool,
-        vol.Required(
-            OPTION_FETCH_AMBISENSE_CAPABILITY,
-            default=DEFAULT_FETCH_AMBISENSE_CAPABILITY,
-        ): bool,
-        vol.Required(
-            OPTION_FETCH_AMBISENSE_ROOMS,
-            default=DEFAULT_FETCH_AMBISENSE_ROOMS,
-        ): bool,
-        vol.Required(
-            OPTION_FETCH_ENERGY_MANAGEMENT,
-            default=DEFAULT_FETCH_ENERGY_MANAGEMENT,
-        ): bool,
-        vol.Required(
-            OPTION_FETCH_EEBUS,
-            default=DEFAULT_FETCH_EEBUS,
-        ): bool,
     }
 )
 
 
 async def validate_input(hass: HomeAssistant, data: dict) -> str:
-    async with MyPyllantAPI(**data) as api:
+    # The product is specifically for Vaillant, not a brand picker.
+    async with MyPyllantAPI(**{OPTION_BRAND: DEFAULT_BRAND, **data}) as api:
         await api.login()
         return data["username"].lower()
 
@@ -194,10 +93,11 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(data=user_input)
 
+        schema = OPTIONS_SCHEMA
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
-                OPTIONS_SCHEMA, self.config_entry.options
+                schema, self.config_entry.options
             ),
         )
 
