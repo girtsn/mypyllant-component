@@ -49,13 +49,15 @@ async def test_user_flow_minimum_fields(hass: HomeAssistant):
     assert result["type"] == data_entry_flow.FlowResultType.FORM
     assert result["step_id"] == "user"
 
+    # Brand is fixed to Vaillant; the simplified form no longer asks for it.
+    login_data = {k: v for k, v in test_user_input.items() if k != "brand"}
     with mock.patch(
         "custom_components.mypyllant.config_flow.validate_input",
         side_effect=AuthenticationFailed,
     ):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"],
-            user_input=test_user_input,
+            user_input=login_data,
         )
 
     assert result["type"] == data_entry_flow.FlowResultType.FORM
