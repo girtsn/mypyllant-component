@@ -1,22 +1,22 @@
 {
   "domain": "mypyllant",
-  "name": "myVAILLANT",
+  "name": "Vaillant Boiler Monitor",
   "after_dependencies": [
     "recorder"
   ],
   "codeowners": [
-    "@signalkraft"
+    "@girtsn"
   ],
   "config_flow": true,
-  "documentation": "https://github.com/signalkraft/mypyllant-component#readme",
+  "documentation": "https://github.com/girtsn/mypyllant-component",
   "integration_type": "hub",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/signalkraft/mypyllant-component/issues",
+  "issue_tracker": "https://github.com/girtsn/mypyllant-component/issues",
   "loggers": [
     "myPyllant"
   ],
   "requirements": [
     "myPyllant==0.9.18"
   ],
-  "version": "v0.9.20b1"
+  "version": "v0.9.20b2"
 }
