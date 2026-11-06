@@ -13,6 +13,7 @@ from homeassistant.core import (
 )
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers import selector
+from homeassistant.helpers.entity import Entity
 
 from myPyllant import export, report
 
@@ -186,7 +187,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 *create_history_sensors(hass, entry.entry_id),
                 *create_cloud_binary_sensors(hass, entry.entry_id),
             ]
-            if sensor.unique_id is not None
+            if isinstance(sensor, Entity) and sensor.unique_id is not None
         }
         manager.remove_obsolete_entities(expected)
 
