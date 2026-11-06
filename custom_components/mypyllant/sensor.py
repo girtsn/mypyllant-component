@@ -318,7 +318,12 @@ async def async_setup_entry(
     # preventing any duplicate energy statistics.
     sensors = await create_system_sensors(hass, config)
     if hass.data[DOMAIN][config.entry_id].get("controllerless"):
+        from .connectivity_diagnostics import create_cloud_diagnostic_sensors
+        from .history_diagnostics import create_history_sensors
+
         sensors.extend(create_controllerless_energy_sensors(hass, config))
+        sensors.extend(create_cloud_diagnostic_sensors(hass, config.entry_id))
+        sensors.extend(create_history_sensors(hass, config.entry_id))
     async_add_entities(sensors)  # type: ignore
 
 
