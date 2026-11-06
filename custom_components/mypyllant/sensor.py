@@ -48,7 +48,7 @@ from custom_components.mypyllant.utils import (
 from myPyllant.utils import prepare_field_value_for_dict
 
 from . import DailyDataCoordinator, SystemCoordinator
-from .const import DOMAIN, CONTROLLERLESS_ENERGY_NAMES
+from .const import DOMAIN, CONTROLLERLESS_ENERGY_NAMES, energy_profile_type
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1284,7 +1284,7 @@ def create_controllerless_energy_sensors(
         for device_index, device in enumerate(system.devices):
             seen: set[tuple[str, str]] = set()
             for profile in device.data:
-                key = (profile.energy_type, profile.operation_mode)
+                key = (energy_profile_type(profile), profile.operation_mode)
                 if key not in CONTROLLERLESS_ENERGY_NAMES or key in seen:
                     continue
                 seen.add(key)

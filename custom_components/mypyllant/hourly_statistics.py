@@ -14,7 +14,7 @@ from homeassistant.helpers import entity_registry as er
 
 from .coordinator import DailyDataCoordinator
 from .sensor import DataSensor
-from .const import CONTROLLERLESS_ENERGY_NAMES
+from .const import CONTROLLERLESS_ENERGY_NAMES, energy_profile_type
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -30,7 +30,7 @@ class _StatisticsOnlyPublisher(DataSensor):
     def name(self) -> str:
         if (data := self.device_data) is None:
             return "Vaillant Energy"
-        energy_type = data.energy_type
+        energy_type = energy_profile_type(data)
         if energy_type is None:
             return "Vaillant Energy"
         return SUPPORTED_PROFILES.get(
@@ -64,7 +64,7 @@ class HourlyStatisticsManager:
             for device_index, data_set in enumerate(system_data["devices_data"]):
                 for data_index, data in enumerate(data_set):
                     if (
-                        data.energy_type,
+                        energy_profile_type(data),
                         data.operation_mode,
                     ) not in SUPPORTED_PROFILES:
                         continue

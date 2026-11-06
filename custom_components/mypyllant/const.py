@@ -1,4 +1,5 @@
 from myPyllant.enums import ZoneOperatingType
+from myPyllant.models import DeviceData
 
 DOMAIN = "mypyllant"
 OPTION_UPDATE_INTERVAL = "update_interval"
@@ -83,3 +84,12 @@ CONTROLLERLESS_ENERGY_NAMES = {
     ("CONSUMED_ELECTRICAL_ENERGY", "HEATING"): "Electricity Heating",
     ("CONSUMED_ELECTRICAL_ENERGY", "DOMESTIC_HOT_WATER"): "Electricity Hot Water",
 }
+
+
+def energy_profile_type(profile: DeviceData) -> str | None:
+    """Return EMF profile kind from definition or fetched-bucket response.
+
+    The currentSystem response uses valueType; the buckets response can use
+    energyType. Both are modeled separately by myPyllant 0.9.18.
+    """
+    return profile.energy_type or profile.value_type

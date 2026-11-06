@@ -12,6 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from custom_components.mypyllant.const import (
+    energy_profile_type,
     DOMAIN,
     OPTION_REFRESH_DELAY,
     DEFAULT_REFRESH_DELAY,
@@ -387,7 +388,7 @@ class DailyDataCoordinator(MyPyllantCoordinator):
                     # the visible daily sensors have been removed.
                     for dd in device.data:
                         dd.skip_data_update = (
-                            dd.energy_type,
+                            energy_profile_type(dd),
                             dd.operation_mode,
                         ) not in {
                             ("CONSUMED_PRIMARY_ENERGY", "HEATING"),
@@ -398,9 +399,15 @@ class DailyDataCoordinator(MyPyllantCoordinator):
                     device_data = self.api.get_data_by_device(
                         device, DeviceDataBucketResolution.HOUR, start, end
                     )
-                    data[system.id]["devices_data"].append(
-                        [da async for da in device_data]
-                    )
+                    fetched = [da async for da in device_data]
+                    # currentSystem uses valueType while bucket responses
+                    # may use energyType. Keep kind and device if omitted.
+                    for definition, result in zip(device.data, fetched):
+                        if not result.energy_type:
+                            result.energy_type = energy_profile_type(definition)
+                        if result.device is None:
+                            result.device = device
+                    data[system.id]["devices_data"].append(fetched)
             # Clear quota state on successful fetch so future updates aren't blocked
             self._clear_quota_state()
             return data
