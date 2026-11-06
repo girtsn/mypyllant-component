@@ -37,7 +37,7 @@ _SAFE_STATUS = re.compile(r"[A-Z][A-Z_0-9]{0,39}\Z")
 # {"codes": [{"code": "3", "type": "MAINTENANCE", "title": "...",
 #             "description": "...", "occurrenceTimestamp": "..."}]}
 # Never copy serialNumber, articleNumber, raw device objects or arbitrary fields.
-_FAULT_CODE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,39}\\Z")
+_FAULT_CODE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,39}\Z")
 _MAX_FAULT_DETAILS = 20
 
 
