@@ -10,7 +10,6 @@ from myPyllant.models import DeviceDataBucket
 from custom_components.mypyllant.const import DOMAIN, energy_profile_type
 from custom_components.mypyllant.hourly_statistics import (
     HourlyStatisticsManager,
-    _StatisticsOnlyPublisher,
 )
 from custom_components.mypyllant.sensor import (
     ControllerlessTodayEnergySensor,
@@ -273,9 +272,7 @@ async def test_name_refresh_waits_until_profile_is_discovered(hass):
     assert manager._refresh_metadata_pending is False
     assert writer.call_count == 2
     assert writer.call_args_list[0].args[2] == []
-    assert writer.call_args_list[0].args[1]["statistic_id"].startswith(
-        f"{DOMAIN}:"
-    )
+    assert writer.call_args_list[0].args[1]["statistic_id"].startswith(f"{DOMAIN}:")
     await manager.async_stop()
 
 
