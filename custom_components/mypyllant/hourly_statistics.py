@@ -23,6 +23,8 @@ SUPPORTED_PROFILES = CONTROLLERLESS_ENERGY_NAMES
 class _StatisticsOnlyPublisher(DataSensor):
     """Reuse the tested hourly recorder writer without adding a HA sensor."""
 
+    _refresh_metadata_if_unchanged: bool = False
+
     @property
     def name(self) -> str:
         if (data := self.device_data) is None:
