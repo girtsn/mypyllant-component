@@ -11,3 +11,5 @@ Stable hotfix for controllerless Vaillant ecoTEC with VR 921, including independ
 **After upgrading:** restart Home Assistant. Confirm the ecoTEC device lists the four Today readings and that the long-term hourly statistics continue receiving data. No user-created Recorder statistics should be deleted. Backup before upgrading.
 
 Based on [myVAILLANT](https://github.com/signalkraft/mypyllant-component).
+
+The device readings depend on the current hourly API response; historical consumption remains in the four separate Recorder statistic series.
