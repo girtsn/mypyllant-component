@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime as dt, timedelta
 import voluptuous as vol
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import (
@@ -166,7 +167,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 *(await create_system_sensors(hass, entry)),
                 *create_controllerless_energy_sensors(hass, entry),
             ]
-            if sensor.unique_id is not None
+            if isinstance(sensor, SensorEntity) and sensor.unique_id is not None
         }
         manager.remove_obsolete_entities(expected)
 
