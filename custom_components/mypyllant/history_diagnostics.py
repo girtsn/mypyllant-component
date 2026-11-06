@@ -78,7 +78,7 @@ def parse_annual_report(content: str, year: int) -> dict[date, tuple[Decimal, ..
 
 def summarize_day(
     day: date,
-    hourly_rows: list[dict],
+    hourly_rows: list[object],
     reported_wh: Decimal | None,
     zone: ZoneInfo,
 ) -> dict:
@@ -138,7 +138,7 @@ class HistoricalReconciliation:
         self.entry_id = entry_id
         self.system = system
         self.stats_manager = stats_manager
-        self.store = Store(hass, 1, f"mypyllant.history_diagnostics_{entry_id}")
+        self.store: Store[dict] = Store(hass, 1, f"mypyllant.history_diagnostics_{entry_id}")
         self.zone = ZoneInfo(hass.config.time_zone or "Europe/Brussels")
         self.cache: dict[str, dict[str, list[str]]] = {}
         self.report_fetches: dict[str, str] = {}
