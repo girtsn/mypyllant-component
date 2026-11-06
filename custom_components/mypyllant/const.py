@@ -85,6 +85,7 @@ CONTROLLERLESS_ENERGY_NAMES = {
     ("CONSUMED_ELECTRICAL_ENERGY", "DOMESTIC_HOT_WATER"): "Electricity Hot Water",
 }
 
+
 def energy_profile_type(profile: DeviceData) -> str | None:
     """Return EMF profile kind from definition or fetched-bucket response.
 

@@ -278,7 +278,9 @@ async def test_publisher_recognizes_current_system_value_type_only(hass):
     await manager.async_stop()
 
 
-async def test_hourly_poll_uses_current_system_value_type(hass, daily_data_coordinator_mock):
+async def test_hourly_poll_uses_current_system_value_type(
+    hass, daily_data_coordinator_mock
+):
     """Do not skip all EMF profile buckets when the declaration has valueType."""
     from myPyllant.models import DeviceData
 
