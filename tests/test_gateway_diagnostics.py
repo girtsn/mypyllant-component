@@ -111,6 +111,19 @@ async def test_positive_faults_and_gateway_off(hass):
     assert "SECRET" not in str(faults.extra_state_attributes)
 
 
+async def test_device_entries_with_no_codes_are_healthy(hass):
+    coordinator, _ = _gateway(hass)
+    coordinator._request = AsyncMock(
+        side_effect=[
+            {"connected": True},
+            [{"codes": []}, {"codes": []}],
+            {"spineEnabled": True},
+        ]
+    )
+    result = await coordinator._async_update_data()
+    assert result["system-1"]["fault_count"] == 0
+
+
 async def test_failed_endpoint_is_unknown_not_reported_healthy(hass):
     coordinator, _ = _gateway(hass)
     coordinator._request = AsyncMock(
