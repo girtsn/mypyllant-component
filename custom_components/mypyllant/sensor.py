@@ -1126,6 +1126,7 @@ class DataSensor(CoordinatorEntity, SensorEntity):
         running_state = 0.0
         current_day = None
         stats: list[StatisticData] = []
+        last_row: StatisticData | None = None
         for bucket in self.device_data.data:
             if bucket.value is None:
                 continue
@@ -1137,17 +1138,22 @@ class DataSensor(CoordinatorEntity, SensorEntity):
                 current_day = bucket_midnight
             running_sum += bucket.value
             running_state += bucket.value
+            last_row = StatisticData(
+                start=bucket.start_date,
+                last_reset=bucket_midnight,
+                sum=running_sum,
+                state=running_state,
+            )
             existing_sum = existing_sums.get(bucket.start_date.timestamp())
             if existing_sum is not None and existing_sum == running_sum:
                 continue
-            stats.append(
-                StatisticData(
-                    start=bucket.start_date,
-                    last_reset=bucket_midnight,
-                    sum=running_sum,
-                    state=running_state,
-                )
-            )
+            stats.append(last_row)
+        if not stats and getattr(self, "_refresh_metadata_if_unchanged", False):
+            # A beta upgrade may have already published all hourly rows with
+            # the old, very long name. Republish only the identical final row
+            # once to update its metadata without altering totals/history.
+            if last_row is not None and existing_sums:
+                stats.append(last_row)
         if not stats:
             return
         async_add_external_statistics(
