@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation
 from io import StringIO
 import logging
 from zoneinfo import ZoneInfo
+from typing import Any
 
 from aiohttp import ClientResponseError
 from homeassistant.components.recorder import get_instance
@@ -78,7 +79,7 @@ def parse_annual_report(content: str, year: int) -> dict[date, tuple[Decimal, ..
 
 def summarize_day(
     day: date,
-    hourly_rows: list[object],
+    hourly_rows: list[Any],
     reported_wh: Decimal | None,
     zone: ZoneInfo,
 ) -> dict:
