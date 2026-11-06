@@ -130,6 +130,7 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
     assert electric.native_value == 1.2
     assert electric.unique_id.endswith("_consumed_electrical_energy_heating_today")
 
+    electric.hass = hass
     with (
         patch(
             "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
