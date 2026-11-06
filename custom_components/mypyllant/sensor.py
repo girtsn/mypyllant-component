@@ -1180,7 +1180,17 @@ class ControllerlessTodayEnergySensor(DataSensor):
 
     # Unlike the old daily counters, these device readings create no statistics.
     _attr_state_class = None  # type: ignore[assignment]
-    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    def __init__(
+        self,
+        system_id: str,
+        de_index: int,
+        da_index: int,
+        coordinator: DailyDataCoordinator,
+    ) -> None:
+        super().__init__(system_id, de_index, da_index, coordinator)
+        # DataSensor.__init__ defaults to Wh; these device readings use kWh.
+        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     @property
     def unique_id(self) -> str | None:
