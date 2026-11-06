@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime, timezone
-from typing import Any
 
 from aiohttp import ClientResponseError
 from homeassistant.components.binary_sensor import (
