@@ -21,10 +21,11 @@ jobs:
           python-version: '3.14'
       - uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b
       - run: uv sync --locked --all-extras --dev
-      - name: Format only changed Python code
+      - name: Apply exact repository pre-commit formatter
         run: |
-          uv run ruff check --fix custom_components/mypyllant/gateway_diagnostics.py tests/test_gateway_diagnostics.py
-          uv run ruff format custom_components/mypyllant/gateway_diagnostics.py tests/test_gateway_diagnostics.py
+          # Ruff in the pre-commit environment may differ from the project dependency.
+          # Apply that exact formatter once; the following step commits its fixes.
+          uv run prek --all-files --skip pytest || true
       - name: Commit format fixes to proposal branch
         run: |
           if ! git diff --quiet; then
