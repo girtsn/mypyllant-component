@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from zoneinfo import ZoneInfo
 
 import pytest
-from aiohttp import ClientResponseError
 
 from custom_components.mypyllant.connectivity_diagnostics import (
     CloudConnectionEntity,
