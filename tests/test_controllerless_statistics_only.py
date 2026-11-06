@@ -91,6 +91,7 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
         ]
     )
     config = SimpleNamespace(entry_id="test-entry")
+    saved_data = source.device_data
     source.coordinator.data = {}
     hass.data[DOMAIN] = {
         "test-entry": {
@@ -120,7 +121,7 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
     source.coordinator.data = {
         source.system_id: {
             "home_name": "Test Home",
-            "devices_data": [[source.device_data]],
+            "devices_data": [[saved_data]],
         }
     }
     electric = next(
