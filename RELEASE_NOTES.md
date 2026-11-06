@@ -1,24 +1,25 @@
-# v0.9.26 — VR 921 gateway diagnostics
+# v0.9.27 — Show actual reported Vaillant fault codes
 
-Adds three controller-independent, read-only diagnostic binary sensors to the
-existing ecoTEC device: **Vaillant Gateway Online**, **Vaillant Reported Faults**
-(with fault-count attribute), and **Vaillant EEBUS Enabled** (with capability
-and SPINE status attributes).
+Extends the v0.9.26 **Vaillant Reported Faults** diagnostic on the existing
+ecoTEC device: it now retains the actual fault information already retrieved
+from `/systems/{systemId}/diagnostic-trouble-codes`.
 
-These values are grounded in cloud GET endpoints confirmed by Vaillant Probe
-v0.6.2 on the VR 921. They do not require a Vaillant heating controller.
+New diagnostic attributes:
+- `reported_fault_count`: total number of reported codes, unchanged
+- `reported_fault_codes`: up to 20 structured entries containing only safe
+  `code`, `type`, `title`, `description`, and `occurred_at` (when returned)
+- `fault_codes_truncated`: whether the full list exceeds the displayed list
 
-- Diagnostics refresh every 4 hours using the existing authenticated API
-  session, independently of hourly energy collection.
-- API/quota/authentication errors leave the affected diagnostic **unavailable**;
-  an empty successful fault list means no faults reported through the API.
-- EEBUS enabled/capable is an interface status, not a connected SPINE peer or
-  a guarantee that the boiler exposes temperatures.
-- Excludes empty RTS, MPC, PV and efficiency datasets and avoids creating
-  placeholder sensors for unavailable information.
-- No boiler control operations, no energy statistics writes, and **no changes**
-  to the four stable `mypyllant:` energy statistic IDs or dashboard history.
+No serial numbers, device identifiers, article numbers or raw API payloads
+are copied into Home Assistant attributes. Fault code strings, status values,
+text length and timestamp formats are validated and bounded.
 
-Upgrade through HACS and restart Home Assistant. Review the ecoTEC device's
-Diagnostics section. Keep existing failure monitors: `Vaillant Cloud Connection
-State` and `Vaillant Gateway Online` mean different things.
+Upstream myPyllant test fixtures confirm the nested shape: each returned
+device entry has a `codes` array, and individual codes can contain the five
+fields listed above. Empty successful arrays mean no faults reported through
+this API; malformed/error responses remain unavailable, never a false 'healthy'.
+
+**No new network requests or different polling cadence:** continues using
+the v0.9.26 four-hour read-only gateway diagnostics coordinator.
+The existing Energy dashboard, statistics, daily sensors, entity unique IDs
+and historical data are not changed. Upgrade in HACS and restart Home Assistant.
