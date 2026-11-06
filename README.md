@@ -21,8 +21,10 @@ sensors on the existing ecoTEC device:
   deliberately different from the Vaillant cloud connection sensor.
 - **Vaillant Reported Faults** (problem): on when the Vaillant fault-code list
   contains at least one entry, off only when a successful GET returns an empty
-  list. Its `reported_fault_count` attribute shows the number of entries;
-  private fault payloads and serial numbers are never exposed.
+  list. Its `reported_fault_count` attribute shows the number of entries; a
+  `reported_fault_codes` attribute also lists each available fault's **code,
+  type, title, description and timestamp** (up to 20 entries, without device
+  serials or article numbers).
 - **Vaillant EEBUS Enabled**: displays the gateway's `spineEnabled` value, with
   `spine_capable` and `spine_enabled_status` attributes. Being enabled does
   **not** prove that an EEBUS peer is paired or any measurements are accessible.
