@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
@@ -128,11 +127,12 @@ class HourlyStatisticsManager:
                 # Legacy DataSensor IDs ended in hourly profile/device indexes;
                 # efficiency entities used this explicit suffix. No other
                 # unknown sensors are deleted by the migration.
-                old_daily_counter = bool(
-                    re.fullmatch(
-                        rf"{re.escape('mypyllant_')}.+_\\d+_\\d+",
-                        entry.unique_id,
-                    )
+                parts = entry.unique_id.rsplit("_", 2)
+                old_daily_counter = (
+                    entry.unique_id.startswith("mypyllant_")
+                    and len(parts) == 3
+                    and parts[-1].isdecimal()
+                    and parts[-2].isdecimal()
                 )
                 old_efficiency = entry.unique_id.endswith(
                     "_heating_energy_efficiency"
