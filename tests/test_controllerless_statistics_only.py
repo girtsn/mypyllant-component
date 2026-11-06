@@ -10,7 +10,6 @@ from myPyllant.models import DeviceDataBucket
 from custom_components.mypyllant.const import DOMAIN, energy_profile_type
 from custom_components.mypyllant.hourly_statistics import (
     HourlyStatisticsManager,
-    _StatisticsOnlyPublisher,
 )
 from custom_components.mypyllant.sensor import (
     ControllerlessTodayEnergySensor,
@@ -32,8 +31,12 @@ async def test_manager_preserves_statistic_id_and_shortens_name(hass):
         recorder.return_value.async_add_executor_job = AsyncMock(return_value={})
         await manager.async_start()
 
-    write.assert_called_once()
-    _, metadata, records = write.call_args.args
+    # First call edits Recorder metadata; the second publishes actual energy.
+    assert write.call_count == 2
+    _, metadata_only, no_rows = write.call_args_list[0].args
+    _, metadata, records = write.call_args_list[1].args
+    assert no_rows == []
+    assert metadata_only == metadata
     assert metadata["statistic_id"] == (
         f"{DOMAIN}:{old.unique_id}".lower().replace("-", "_")
     )
@@ -203,13 +206,11 @@ def test_cleanup_removes_orphaned_entities_but_keeps_supported_sensors(hass):
         get_reg.return_value.async_remove.assert_not_called()
 
 
-async def test_first_publish_refreshes_existing_metadata_without_changing_sum(hass):
-    """Ensure old long Recorder names update even with no new hourly buckets."""
+async def test_metadata_only_name_refresh_keeps_existing_hourly_values(hass):
+    """A metadata-only Recorder import updates names, never existing sums."""
     buckets = _make_buckets([100.0, 200.0, 300.0])
     source = _make_sensor(hass, buckets)
-    publisher = _StatisticsOnlyPublisher(source.system_id, 0, 0, source.coordinator)
-    publisher.hass = hass
-    publisher._refresh_metadata_if_unchanged = True
+    manager = HourlyStatisticsManager(hass, source.coordinator, "test-entry")
     stat_id = f"{DOMAIN}:{source.unique_id}".lower().replace("-", "_")
 
     async def current_rows(func, hass, start, *args):
@@ -224,21 +225,55 @@ async def test_first_publish_refreshes_existing_metadata_without_changing_sum(ha
         }
 
     with (
-        patch("custom_components.mypyllant.sensor.get_instance") as rec,
+        patch("custom_components.mypyllant.sensor.get_instance") as recorder,
         patch(
             "custom_components.mypyllant.sensor.async_add_external_statistics"
-        ) as write,
+        ) as writer,
     ):
-        rec.return_value.async_add_executor_job = AsyncMock(side_effect=current_rows)
-        await publisher._write_hourly_statistics()
+        recorder.return_value.async_add_executor_job = AsyncMock(
+            side_effect=current_rows
+        )
+        await manager.async_start()
+        # A second poll with the same rows must NOT reimport old statistics
+        # or repeat the one-shot metadata refresh.
+        await manager.async_publish()
 
-    write.assert_called_once()
-    _, metadata, records = write.call_args.args
+    writer.assert_called_once()
+    _, metadata, records = writer.call_args.args
+    assert records == []
     assert metadata["name"] == "Electricity Heating"
     assert metadata["statistic_id"] == stat_id
-    assert len(records) == 1
-    assert records[0]["sum"] == 600.0
-    assert records[0]["state"] == 600.0
+    assert metadata["unit_of_measurement"] == UnitOfEnergy.WATT_HOUR
+    await manager.async_stop()
+
+
+async def test_name_refresh_waits_until_profile_is_discovered(hass):
+    """A transient empty fetch must not consume the queued metadata rename."""
+    source = _make_sensor(hass, _make_buckets([100.0]))
+    coordinator = source.coordinator
+    saved = coordinator.data
+    coordinator.data = {}
+    manager = HourlyStatisticsManager(hass, coordinator, "test-entry")
+
+    with (
+        patch("custom_components.mypyllant.sensor.get_instance") as recorder,
+        patch(
+            "custom_components.mypyllant.sensor.async_add_external_statistics"
+        ) as writer,
+    ):
+        recorder.return_value.async_add_executor_job = AsyncMock(return_value={})
+        await manager.async_start()
+        assert manager._refresh_metadata_pending is True
+        writer.assert_not_called()
+
+        coordinator.data = saved
+        await manager.async_publish()
+
+    assert manager._refresh_metadata_pending is False
+    assert writer.call_count == 2
+    assert writer.call_args_list[0].args[2] == []
+    assert writer.call_args_list[0].args[1]["statistic_id"].startswith(f"{DOMAIN}:")
+    await manager.async_stop()
 
 
 def test_real_gateway_uses_value_type_not_energy_type():
@@ -268,8 +303,11 @@ async def test_publisher_recognizes_current_system_value_type_only(hass):
     ):
         recorder.return_value.async_add_executor_job = AsyncMock(return_value={})
         await manager.async_start()
-    writer.assert_called_once()
-    _, metadata, stats = writer.call_args.args
+    assert writer.call_count == 2
+    _, metadata_only, empty_stats = writer.call_args_list[0].args
+    _, metadata, stats = writer.call_args_list[1].args
+    assert metadata_only == metadata
+    assert empty_stats == []
     assert metadata["statistic_id"] == (
         f"{DOMAIN}:{source.unique_id}".lower().replace("-", "_")
     )
