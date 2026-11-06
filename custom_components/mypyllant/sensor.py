@@ -1179,7 +1179,8 @@ class ControllerlessTodayEnergySensor(DataSensor):
     external mypyllant:* statistics, retaining all existing Energy history.
     """
 
-    _attr_state_class = None
+    # Unlike the old daily counters, these device readings create no statistics.
+    _attr_state_class = None  # type: ignore[assignment]
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     @property
@@ -1190,7 +1191,7 @@ class ControllerlessTodayEnergySensor(DataSensor):
     @property
     def name(self) -> str:
         data = self.device_data
-        if data is None:
+        if data is None or data.energy_type is None:
             return "Energy Today"
         label = CONTROLLERLESS_ENERGY_NAMES.get(
             (data.energy_type, data.operation_mode), "Energy"
