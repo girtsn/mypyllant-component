@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from homeassistant.const import UnitOfEnergy
 from myPyllant.models import DeviceDataBucket
 
-from custom_components.mypyllant.const import DOMAIN
+from custom_components.mypyllant.const import DOMAIN, energy_profile_type
 from custom_components.mypyllant.hourly_statistics import (
     HourlyStatisticsManager,
     _StatisticsOnlyPublisher,
@@ -77,7 +77,7 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
         brand_name="Vaillant",
         product_name_display="ecoTEC",
         data=[
-            SimpleNamespace(energy_type=kind, operation_mode=mode)
+            SimpleNamespace(energy_type=None, value_type=kind, operation_mode=mode)
             for kind, mode in profiles
         ],
     )
@@ -239,3 +239,83 @@ async def test_first_publish_refreshes_existing_metadata_without_changing_sum(ha
     assert len(records) == 1
     assert records[0]["sum"] == 600.0
     assert records[0]["state"] == 600.0
+
+
+def test_real_gateway_uses_value_type_not_energy_type():
+    """myPyllant 0.9.18 preserves currentSystem.valueType separately."""
+    from myPyllant.models import DeviceData
+
+    energy = DeviceData(
+        operation_mode="HEATING",
+        value_type="CONSUMED_PRIMARY_ENERGY",
+    )
+    assert energy.energy_type is None
+    assert energy_profile_type(energy) == "CONSUMED_PRIMARY_ENERGY"
+
+
+async def test_publisher_recognizes_current_system_value_type_only(hass):
+    """Statistics must be published with original IDs when energyType is absent."""
+    source = _make_sensor(hass, _make_buckets([120.0, 240.0]))
+    profile = source.device_data
+    profile.value_type = profile.energy_type
+    profile.energy_type = None
+    manager = HourlyStatisticsManager(hass, source.coordinator, "test-entry")
+    with (
+        patch("custom_components.mypyllant.sensor.get_instance") as recorder,
+        patch(
+            "custom_components.mypyllant.sensor.async_add_external_statistics"
+        ) as writer,
+    ):
+        recorder.return_value.async_add_executor_job = AsyncMock(return_value={})
+        await manager.async_start()
+    writer.assert_called_once()
+    _, metadata, stats = writer.call_args.args
+    assert metadata["statistic_id"] == (
+        f"{DOMAIN}:{source.unique_id}".lower().replace("-", "_")
+    )
+    assert metadata["name"] == "Electricity Heating"
+    assert len(stats) == 2
+    await manager.async_stop()
+
+
+async def test_hourly_poll_uses_current_system_value_type(hass, daily_data_coordinator_mock):
+    """Do not skip all EMF profile buckets when the declaration has valueType."""
+    from myPyllant.models import DeviceData
+
+    source = _make_sensor(hass, _make_buckets([1200.0]))
+    definition = DeviceData(
+        operation_mode="HEATING",
+        value_type="CONSUMED_ELECTRICAL_ENERGY",
+    )
+    device = source.device
+    device.data = [definition]
+    system = SimpleNamespace(
+        id=source.system_id,
+        timezone=timezone.utc,
+        home=SimpleNamespace(home_name="Test Home", nomenclature="Test Home"),
+        devices=[device],
+    )
+    daily_data_coordinator_mock.hass_data["system_coordinator"].data = [system]
+
+    fetched = DeviceData(
+        operation_mode="HEATING",
+        data=_make_buckets([1200.0]),
+        total_consumption=1200.0,
+    )
+
+    async def get_buckets(device_arg, resolution, start, end):
+        assert device_arg is device
+        assert definition.skip_data_update is False
+        yield fetched
+
+    daily_data_coordinator_mock.api.get_data_by_device = get_buckets
+    with patch.object(
+        daily_data_coordinator_mock,
+        "_refresh_session",
+        new_callable=AsyncMock,
+    ):
+        result = await daily_data_coordinator_mock._async_update_data()
+
+    assert result[source.system_id]["devices_data"][0][0].data
+    assert fetched.energy_type == "CONSUMED_ELECTRICAL_ENERGY"
+    assert fetched.device is device
