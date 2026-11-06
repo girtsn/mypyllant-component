@@ -38,6 +38,14 @@ async def async_setup_entry(
         _LOGGER.warning("No system data, skipping binary sensors")
         return
 
+    if hass.data[DOMAIN][config.entry_id].get("controllerless"):
+        from .connectivity_diagnostics import create_cloud_binary_sensors
+
+        # Only cloud connectivity. Old controller-online/firmware flags are
+        # unsupported by VR 921 with Tado X / OpenTherm control.
+        async_add_entities(create_cloud_binary_sensors(hass, config.entry_id))
+        return
+
     sensors: EntityList[BinarySensorEntity] = EntityList()
     for index, system in enumerate(coordinator.data):
         sensors.append(lambda: ControlError(index, coordinator))
