@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime as dt, timedelta
+from datetime import date, datetime as dt, timedelta
 import voluptuous as vol
-from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import (
@@ -41,6 +40,8 @@ from .const import (
 )
 from .coordinator import SystemCoordinator, DailyDataCoordinator
 from .hourly_statistics import HourlyStatisticsManager
+from .connectivity_diagnostics import CloudHealth, create_cloud_binary_sensors, create_cloud_diagnostic_sensors
+from .history_diagnostics import HistoricalReconciliation, create_history_sensors
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -145,31 +146,64 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # No Tado/OpenTherm control operations are offered as Vaillant controls:
     # the VR 921 EMF endpoint exposes energy data but not controller controls.
-    active_platforms = [Platform.SENSOR] if controllerless else PLATFORMS
+    if controllerless:
+        manager = HourlyStatisticsManager(hass, daily_data_coordinator, entry.entry_id)
+        hass.data[DOMAIN][entry.entry_id]["hourly_statistics_manager"] = manager
+        health = CloudHealth(hass, system_coordinator, daily_data_coordinator)
+        hass.data[DOMAIN][entry.entry_id]["cloud_health"] = health
+        history = HistoricalReconciliation(
+            hass, entry.entry_id, system_coordinator, manager
+        )
+        hass.data[DOMAIN][entry.entry_id]["historical_diagnostics"] = history
+        health.start()
+
+    active_platforms = (
+        [Platform.SENSOR, Platform.BINARY_SENSOR] if controllerless else PLATFORMS
+    )
     hass.data[DOMAIN][entry.entry_id]["platforms"] = active_platforms
     await hass.config_entries.async_forward_entry_setups(entry, active_platforms)
 
     if controllerless:
-        manager = HourlyStatisticsManager(hass, daily_data_coordinator, entry.entry_id)
-        hass.data[DOMAIN][entry.entry_id]["hourly_statistics_manager"] = manager
         await manager.async_start()
-        # Compare the existing registry against the exact entities actually
-        # offered by the controllerless setup, including the four new today
-        # readings. Do not remove supported (even user-disabled) entities.
+        await history.async_start()
         from .sensor import (
             create_system_sensors,
             create_controllerless_energy_sensors,
         )
 
+        # The migration must preserve new diagnostics across ALL platforms,
+        # including the connectivity binary sensor (not just sensors).
         expected = {
             sensor.unique_id
             for sensor in [
                 *(await create_system_sensors(hass, entry)),
                 *create_controllerless_energy_sensors(hass, entry),
+                *create_cloud_diagnostic_sensors(hass, entry.entry_id),
+                *create_history_sensors(hass, entry.entry_id),
+                *create_cloud_binary_sensors(hass, entry.entry_id),
             ]
-            if isinstance(sensor, SensorEntity) and sensor.unique_id is not None
+            if sensor.unique_id is not None
         }
         manager.remove_obsolete_entities(expected)
+
+        async def handle_reconcile(call: ServiceCall) -> ServiceResponse:
+            return await history.async_reconcile(
+                call.data["start_date"],
+                call.data["end_date"],
+                refresh_report=call.data["refresh_report"],
+            )
+
+        hass.services.async_register(
+            DOMAIN,
+            "reconcile_energy_history",
+            handle_reconcile,
+            schema=vol.Schema({
+                vol.Required("start_date"): vol.Coerce(date.fromisoformat),
+                vol.Required("end_date"): vol.Coerce(date.fromisoformat),
+                vol.Optional("refresh_report", default=False): bool,
+            }),
+            supports_response=SupportsResponse.ONLY,
+        )
 
     async def handle_export(call: ServiceCall) -> ServiceResponse:
         _LOGGER.debug("Exporting data with params %s", call.data)
@@ -255,6 +289,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry, active_platforms
     )
     if unload_ok:
+        if history := data.get("historical_diagnostics"):
+            await history.async_stop()
+            hass.services.async_remove(DOMAIN, "reconcile_energy_history")
+        if health := data.get("cloud_health"):
+            health.stop()
         if manager := data.get("hourly_statistics_manager"):
             await manager.async_stop()
         await hass.data[DOMAIN][entry.entry_id][
