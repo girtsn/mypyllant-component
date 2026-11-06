@@ -134,9 +134,7 @@ class HourlyStatisticsManager:
                     and parts[-1].isdecimal()
                     and parts[-2].isdecimal()
                 )
-                old_efficiency = entry.unique_id.endswith(
-                    "_heating_energy_efficiency"
-                )
+                old_efficiency = entry.unique_id.endswith("_heating_energy_efficiency")
                 if not (old_daily_counter or old_efficiency):
                     continue
             # Controllerless installations expose only the sensor platform.

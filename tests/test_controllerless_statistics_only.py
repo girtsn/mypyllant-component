@@ -86,9 +86,7 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
             SimpleNamespace(
                 id=source.system_id,
                 devices=[device],
-                home=SimpleNamespace(
-                    home_name="Test Home", nomenclature="Test Home"
-                ),
+                home=SimpleNamespace(home_name="Test Home", nomenclature="Test Home"),
             )
         ]
     )
@@ -102,13 +100,14 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
     }
     sensors = create_controllerless_energy_sensors(hass, config)
     assert len(sensors) == 4
-    assert all(isinstance(sensor, ControllerlessTodayEnergySensor) for sensor in sensors)
+    assert all(
+        isinstance(sensor, ControllerlessTodayEnergySensor) for sensor in sensors
+    )
     assert all(sensor.native_value is None for sensor in sensors)
     assert len({sensor.unique_id for sensor in sensors}) == 4
     assert all(
-        sensor.device_info["identifiers"] == {
-            (DOMAIN, f"{source.system_id}_device_test-uuid")
-        }
+        sensor.device_info["identifiers"]
+        == {(DOMAIN, f"{source.system_id}_device_test-uuid")}
         for sensor in sensors
     )
     assert all(sensor.state_class is None for sensor in sensors)
@@ -125,13 +124,10 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
         }
     }
     electric = next(
-        sensor for sensor in sensors
-        if sensor.name == "Electricity Heating Today"
+        sensor for sensor in sensors if sensor.name == "Electricity Heating Today"
     )
     assert electric.native_value == 1.2
-    assert electric.unique_id.endswith(
-        "_consumed_electrical_energy_heating_today"
-    )
+    assert electric.unique_id.endswith("_consumed_electrical_energy_heating_today")
 
     with (
         patch(

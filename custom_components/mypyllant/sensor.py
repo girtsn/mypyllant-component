@@ -1212,9 +1212,7 @@ class ControllerlessTodayEnergySensor(CoordinatorEntity, SensorEntity):
 
     @property
     def name(self) -> str:
-        label = CONTROLLERLESS_ENERGY_NAMES[
-            (self.energy_type, self.operation_mode)
-        ]
+        label = CONTROLLERLESS_ENERGY_NAMES[(self.energy_type, self.operation_mode)]
         return f"{label} Today"
 
     @property
@@ -1251,8 +1249,7 @@ class ControllerlessTodayEnergySensor(CoordinatorEntity, SensorEntity):
             total = sum(
                 bucket.value
                 for bucket in profile.data
-                if bucket.value is not None
-                and bucket.start_date.date() == today
+                if bucket.value is not None and bucket.start_date.date() == today
             )
             return round(total / 1000, 2)
         return None
@@ -1303,6 +1300,7 @@ def create_controllerless_energy_sensors(
                     )
                 )
     return sensors
+
 
 class EfficiencySensor(CoordinatorEntity, SensorEntity):
     coordinator: DailyDataCoordinator
