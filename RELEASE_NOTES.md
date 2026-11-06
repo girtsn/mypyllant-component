@@ -1,15 +1,16 @@
-# v0.9.22 — Vaillant Boiler Monitor
+# v0.9.23 — Vaillant Boiler Monitor
 
-Stable hotfix for controllerless Vaillant ecoTEC with VR 921, including independent Tado X / OpenTherm heating control.
+Stable corrective release for controllerless ecoTEC with VR 921 gateway and independent Tado X/OpenTherm heating control.
 
-- **Restore boiler-device energy readings:** register all four supported energy profiles from the gateway's EMF system description at startup. An empty or delayed hourly energy response no longer prevents those four sensors being created.
-- The four **Today** readings belong to the existing boiler device and show **kWh** when hourly data is available. During an API outage, they remain registered, showing unavailable rather than disappearing.
-- **Safer migration:** remove only unsupported control-platform entities and positively identified obsolete daily energy / efficiency sensors. Do not remove unknown, disabled or temporarily unavailable diagnostic sensors.
-- Defer the Recorder display-name migration until the hourly publisher has energy profiles, rather than consuming its opportunity on an empty startup response.
-- Preserve unchanged `mypyllant:` hourly energy statistic IDs, recorded values, historical Energy dashboard configuration, polling, and controller-independent behavior.
+**Root cause corrected:** the pinned myPyllant 0.9.18 model exposes the profile kind from EMF `currentSystem` as `value_type`, while hourly bucket results may use `energy_type`. Earlier controllerless releases filtered the system definitions by `energy_type` only, resulting in no active energy profiles, no boiler device sensors and unchanged long Recorder labels.
 
-**After upgrading:** restart Home Assistant. Confirm the ecoTEC device lists the four Today readings and that the long-term hourly statistics continue receiving data. No user-created Recorder statistics should be deleted. Backup before upgrading.
+- Discover supported Gas Heating, Gas Hot Water, Electricity Heating and Electricity Hot Water profiles using either field.
+- Fetch the four actual hourly energy bucket series and carry the requested profile kind and device identity into the results when Vaillant omits them, retaining original Recorder statistic IDs.
+- Register the four non-statistical, read-only Today sensors on the existing boiler device, showing kWh once hourly measurements are received.
+- Update the existing Recorder series names on import to short labels without renaming statistic IDs, resetting sums or deleting history.
+- Retain the conservative entity cleanup introduced in v0.9.22, which does not remove unknown diagnostic sensors.
+- Added regression tests for the real gateway-style `valueType` payload and the polling, publishing and device-discovery paths.
+
+**Upgrade:** Back up Home Assistant. Install this version in HACS and restart Home Assistant. The four Recorder statistics should start receiving hourly data again and should acquire their shorter display names when updated. Their historical statistic IDs and Energy dashboard settings remain unchanged.
 
 Based on [myVAILLANT](https://github.com/signalkraft/mypyllant-component).
-
-The device readings depend on the current hourly API response; historical consumption remains in the four separate Recorder statistic series.
