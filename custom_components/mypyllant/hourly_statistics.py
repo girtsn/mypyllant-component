@@ -14,11 +14,12 @@ from homeassistant.helpers import entity_registry as er
 
 from .coordinator import DailyDataCoordinator
 from .sensor import DataSensor
-from .const import DOMAIN, CONTROLLERLESS_ENERGY_NAMES
+from .const import CONTROLLERLESS_ENERGY_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 
 SUPPORTED_PROFILES = CONTROLLERLESS_ENERGY_NAMES
+
 
 class _StatisticsOnlyPublisher(DataSensor):
     """Reuse the tested hourly recorder writer without adding a HA sensor."""
@@ -71,7 +72,9 @@ class HourlyStatisticsManager:
                         system_id, device_index, data_index, self.coordinator
                     )
                     publisher.hass = self.hass
-                    publisher._refresh_metadata_if_unchanged = self._refresh_metadata_pending
+                    publisher._refresh_metadata_if_unchanged = (
+                        self._refresh_metadata_pending
+                    )
                     if publisher.unique_id is None:
                         continue
                     self._publishers.append(publisher)

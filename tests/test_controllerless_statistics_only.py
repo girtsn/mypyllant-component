@@ -57,15 +57,15 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
     )
     source = _make_sensor(
         hass,
-        [DeviceDataBucket(
-            start_date=midnight,
-            end_date=midnight + timedelta(hours=1),
-            value=1200.0,
-        )],
+        [
+            DeviceDataBucket(
+                start_date=midnight,
+                end_date=midnight + timedelta(hours=1),
+                value=1200.0,
+            )
+        ],
     )
-    mirror = ControllerlessTodayEnergySensor(
-        source.system_id, 0, 0, source.coordinator
-    )
+    mirror = ControllerlessTodayEnergySensor(source.system_id, 0, 0, source.coordinator)
     mirror.hass = hass
     assert mirror.native_value == 1.2
     assert mirror.name == "Electricity Heating Today"
@@ -75,9 +75,7 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
     assert mirror.native_unit_of_measurement == UnitOfEnergy.KILO_WATT_HOUR
 
     config = SimpleNamespace(entry_id="test-entry")
-    hass.data[DOMAIN] = {
-        "test-entry": {"daily_data_coordinator": source.coordinator}
-    }
+    hass.data[DOMAIN] = {"test-entry": {"daily_data_coordinator": source.coordinator}}
     sensors = create_controllerless_energy_sensors(hass, config)
     assert len(sensors) == 1
     assert sensors[0].unique_id == mirror.unique_id
@@ -105,7 +103,9 @@ def test_cleanup_removes_orphaned_entities_but_keeps_supported_sensors(hass):
         SimpleNamespace(entity_id="sensor.keep", domain="sensor", unique_id="keep"),
         SimpleNamespace(entity_id="sensor.old_daily", domain="sensor", unique_id="old"),
         SimpleNamespace(entity_id="switch.away", domain="switch", unique_id="away"),
-        SimpleNamespace(entity_id="binary_sensor.old", domain="binary_sensor", unique_id="oldb"),
+        SimpleNamespace(
+            entity_id="binary_sensor.old", domain="binary_sensor", unique_id="oldb"
+        ),
     ]
     with (
         patch("custom_components.mypyllant.hourly_statistics.er.async_get") as get_reg,
@@ -135,15 +135,19 @@ async def test_first_publish_refreshes_existing_metadata_without_changing_sum(ha
     async def current_rows(func, hass, start, *args):
         if start < buckets[0].start_date:
             return {}
-        return {stat_id: [
-            {"start": buckets[0].start_date.timestamp(), "sum": 100.0},
-            {"start": buckets[1].start_date.timestamp(), "sum": 300.0},
-            {"start": buckets[2].start_date.timestamp(), "sum": 600.0},
-        ]}
+        return {
+            stat_id: [
+                {"start": buckets[0].start_date.timestamp(), "sum": 100.0},
+                {"start": buckets[1].start_date.timestamp(), "sum": 300.0},
+                {"start": buckets[2].start_date.timestamp(), "sum": 600.0},
+            ]
+        }
 
     with (
         patch("custom_components.mypyllant.sensor.get_instance") as rec,
-        patch("custom_components.mypyllant.sensor.async_add_external_statistics") as write,
+        patch(
+            "custom_components.mypyllant.sensor.async_add_external_statistics"
+        ) as write,
     ):
         rec.return_value.async_add_executor_job = AsyncMock(side_effect=current_rows)
         await publisher._write_hourly_statistics()

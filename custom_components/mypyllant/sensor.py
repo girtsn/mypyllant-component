@@ -1171,7 +1171,6 @@ class DataSensor(CoordinatorEntity, SensorEntity):
         )
 
 
-
 class ControllerlessTodayEnergySensor(DataSensor):
     """A device-page display of today's energy, not a Recorder statistics source.
 
@@ -1228,7 +1227,10 @@ def create_controllerless_energy_sensors(
     for system_id, system_data in (coordinator.data or {}).items():
         for device_index, dataset in enumerate(system_data["devices_data"]):
             for data_index, data in enumerate(dataset):
-                if (data.energy_type, data.operation_mode) not in CONTROLLERLESS_ENERGY_NAMES:
+                if (
+                    data.energy_type,
+                    data.operation_mode,
+                ) not in CONTROLLERLESS_ENERGY_NAMES:
                     continue
                 sensors.append(
                     lambda si=system_id, di=device_index, ai=data_index: (
