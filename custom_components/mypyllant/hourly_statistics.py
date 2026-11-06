@@ -75,6 +75,27 @@ class HourlyStatisticsManager:
                     self._publishers.append(publisher)
                     self._profile_ids.add(publisher.unique_id)
 
+    def profile_statistics(self) -> dict[tuple[str, str], str]:
+        """Map stable energy profile types to their EXISTING Recorder IDs.
+
+        This deliberately does not depend on old or new display names.
+        """
+        if not self._publishers:
+            self._build_publishers()
+        ids: dict[tuple[str, str], str] = {}
+        for publisher in self._publishers:
+            data = publisher.device_data
+            if data is None:
+                continue
+            key = (energy_profile_type(data), data.operation_mode)
+            metadata = publisher.hourly_statistic_metadata()
+            if key not in SUPPORTED_PROFILES or metadata is None:
+                continue
+            if key in ids and ids[key] != metadata["statistic_id"]:
+                raise ValueError("duplicate_energy_profile")
+            ids[key] = metadata["statistic_id"]
+        return ids
+
     async def async_start(self) -> None:
         self._build_publishers()
         self._unsubscribe = self.coordinator.async_add_listener(self._on_refresh)
@@ -128,9 +149,11 @@ class HourlyStatisticsManager:
         registry = er.async_get(self.hass)
         removed = 0
         for entry in er.async_entries_for_config_entry(registry, self.entry_id):
+            # Controllerless mode also registers a real cloud-connectivity
+            # binary sensor. Never remove any currently provided entity.
+            if entry.unique_id in active_sensor_unique_ids:
+                continue
             if entry.domain == "sensor":
-                if entry.unique_id in active_sensor_unique_ids:
-                    continue
                 # Legacy DataSensor IDs ended in hourly profile/device indexes;
                 # efficiency entities used this explicit suffix. No other
                 # unknown sensors are deleted by the migration.
