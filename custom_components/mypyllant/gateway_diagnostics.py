@@ -24,6 +24,7 @@ from homeassistant.helpers.update_coordinator import (
 )
 
 from .connectivity_diagnostics import device_info
+from .coordinator import SystemCoordinator
 from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ class GatewayDiagnosticsCoordinator(DataUpdateCoordinator):
     """Poll three verified controller-independent GET routes every four hours."""
 
     def __init__(
-        self, hass: HomeAssistant, system_coordinator: DataUpdateCoordinator
+        self, hass: HomeAssistant, system_coordinator: SystemCoordinator
     ) -> None:
         super().__init__(
             hass,
