@@ -47,6 +47,7 @@ from .connectivity_diagnostics import (
     create_cloud_diagnostic_sensors,
 )
 from .history_diagnostics import HistoricalReconciliation, create_history_sensors
+from .gateway_diagnostics import GatewayDiagnosticsCoordinator, create_gateway_binary_sensors
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -161,6 +162,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
         hass.data[DOMAIN][entry.entry_id]["historical_diagnostics"] = history
         health.start()
+        # Independent 4-hour diagnostics: no extra requests in energy polling.
+        gateway = GatewayDiagnosticsCoordinator(hass, system_coordinator)
+        hass.data[DOMAIN][entry.entry_id]["gateway_diagnostics"] = gateway
+        # A fault or quota error must not stop existing energy monitoring.
+        await gateway.async_refresh()
 
     active_platforms = (
         [Platform.SENSOR, Platform.BINARY_SENSOR] if controllerless else PLATFORMS
@@ -186,6 +192,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 *create_cloud_diagnostic_sensors(hass, entry.entry_id),
                 *create_history_sensors(hass, entry.entry_id),
                 *create_cloud_binary_sensors(hass, entry.entry_id),
+                *create_gateway_binary_sensors(hass, entry.entry_id),
             ]
             if isinstance(sensor, Entity) and sensor.unique_id is not None
         }
