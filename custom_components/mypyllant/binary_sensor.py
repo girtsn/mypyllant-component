@@ -40,10 +40,16 @@ async def async_setup_entry(
 
     if hass.data[DOMAIN][config.entry_id].get("controllerless"):
         from .connectivity_diagnostics import create_cloud_binary_sensors
+        from .gateway_diagnostics import create_gateway_binary_sensors
 
-        # Only cloud connectivity. Old controller-online/firmware flags are
-        # unsupported by VR 921 with Tado X / OpenTherm control.
-        async_add_entities(create_cloud_binary_sensors(hass, config.entry_id))
+        # Controller-independent VR 921 diagnostics only. Do not expose
+        # controller actions, arbitrary power/temperature or fake fault states.
+        async_add_entities(
+            [
+                *create_cloud_binary_sensors(hass, config.entry_id),
+                *create_gateway_binary_sensors(hass, config.entry_id),
+            ]
+        )
         return
 
     sensors: EntityList[BinarySensorEntity] = EntityList()
