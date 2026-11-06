@@ -114,8 +114,17 @@ class GatewayDiagnosticsCoordinator(DataUpdateCoordinator):
                     if type(connected) is bool:
                         readings["connected"] = connected
                 elif kind == "faults" and isinstance(payload, list):
-                    # No raw fault bodies, serials or device IDs become entity attributes.
-                    readings["fault_count"] = len(payload)
+                    # Vaillant lists devices, each with a 'codes' array.
+                    # An empty list of devices or empty codes arrays means no
+                    # reported faults. Malformed entries remain unknown.
+                    if all(
+                        isinstance(device, dict)
+                        and isinstance(device.get("codes"), list)
+                        for device in payload
+                    ):
+                        readings["fault_count"] = sum(
+                            len(device["codes"]) for device in payload
+                        )
                 elif kind == "eebus" and isinstance(payload, dict):
                     enabled = payload.get("spineEnabled")
                     capable = payload.get("spineCapable")
