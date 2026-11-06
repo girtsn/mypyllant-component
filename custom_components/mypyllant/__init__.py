@@ -47,7 +47,10 @@ from .connectivity_diagnostics import (
     create_cloud_diagnostic_sensors,
 )
 from .history_diagnostics import HistoricalReconciliation, create_history_sensors
-from .gateway_diagnostics import GatewayDiagnosticsCoordinator, create_gateway_binary_sensors
+from .gateway_diagnostics import (
+    GatewayDiagnosticsCoordinator,
+    create_gateway_binary_sensors,
+)
 
 _LOGGER = logging.getLogger(__name__)
 

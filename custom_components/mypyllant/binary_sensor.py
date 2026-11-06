@@ -44,10 +44,12 @@ async def async_setup_entry(
 
         # Controller-independent VR 921 diagnostics only. Do not expose
         # controller actions, arbitrary power/temperature or fake fault states.
-        async_add_entities([
-            *create_cloud_binary_sensors(hass, config.entry_id),
-            *create_gateway_binary_sensors(hass, config.entry_id),
-        ])
+        async_add_entities(
+            [
+                *create_cloud_binary_sensors(hass, config.entry_id),
+                *create_gateway_binary_sensors(hass, config.entry_id),
+            ]
+        )
         return
 
     sensors: EntityList[BinarySensorEntity] = EntityList()
