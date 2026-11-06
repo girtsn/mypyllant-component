@@ -58,6 +58,8 @@ async def test_successful_diagnostics_with_empty_faults(hass):
         "system-1": {
             "connected": True,
             "fault_count": 0,
+            "fault_details": [],
+            "fault_details_truncated": False,
             "eebus_enabled": True,
             "eebus_capable": True,
             "eebus_status": "DETERMINED",
@@ -76,7 +78,11 @@ async def test_successful_diagnostics_with_empty_faults(hass):
     )
     assert connected.available and connected.is_on is True
     assert faults.available and faults.is_on is False
-    assert faults.extra_state_attributes == {"reported_fault_count": 0}
+    assert faults.extra_state_attributes == {
+        "reported_fault_count": 0,
+        "reported_fault_codes": [],
+        "fault_codes_truncated": False,
+    }
     assert eebus.available and eebus.is_on is True
     assert eebus.extra_state_attributes["spine_capable"] is True
     assert eebus.extra_state_attributes["spine_enabled_status"] == "DETERMINED"
@@ -122,6 +128,74 @@ async def test_device_entries_with_no_codes_are_healthy(hass):
     )
     result = await coordinator._async_update_data()
     assert result["system-1"]["fault_count"] == 0
+
+
+async def test_fault_details_from_real_mypyllant_fixture_shape(hass):
+    coordinator, _ = _gateway(hass)
+    coordinator._request = AsyncMock(
+        side_effect=[
+            {"connected": True},
+            [
+                {
+                    "serialNumber": "SECRET-DEVICE-SERIAL",
+                    "articleNumber": "SECRET-ARTICLE",
+                    "codes": [
+                        {
+                            "code": "3",
+                            "type": "MAINTENANCE",
+                            "title": "Issues with your heating system",
+                            "description": "Your heating system reported errors.",
+                            "occurrenceTimestamp": "2024-03-20T09:57:52Z",
+                            "deviceId": "PRIVATE-ID",
+                        },
+                        {"code": "F.28", "type": "FAULT"},
+                    ],
+                },
+                {"serialNumber": "ANOTHER-SECRET", "codes": []},
+            ],
+            {"spineEnabled": True},
+        ]
+    )
+    data = await coordinator._async_update_data()
+    coordinator.async_set_updated_data(data)
+    faults = GatewayDiagnosticBinarySensor(
+        coordinator, "system-1", "boiler-1", "fault_count"
+    )
+    assert faults.is_on is True
+    attrs = faults.extra_state_attributes
+    assert attrs["reported_fault_count"] == 2
+    assert [x["code"] for x in attrs["reported_fault_codes"]] == ["3", "F.28"]
+    assert attrs["reported_fault_codes"][0]["type"] == "MAINTENANCE"
+    assert (
+        attrs["reported_fault_codes"][0]["title"] == "Issues with your heating system"
+    )
+    assert (
+        attrs["reported_fault_codes"][0]["occurred_at"] == "2024-03-20T09:57:52+00:00"
+    )
+    assert "SECRET-DEVICE-SERIAL" not in str(attrs)
+    assert "SECRET-ARTICLE" not in str(attrs)
+    assert "PRIVATE-ID" not in str(attrs)
+
+
+async def test_fault_details_bounded_and_malformed_are_not_exposed(hass):
+    from custom_components.mypyllant.gateway_diagnostics import _fault_details
+
+    entries = [
+        {
+            "code": f"F.{index}",
+            "type": "ERROR",
+            "description": "HTTPS://unsafe.example" if index == 0 else "Boiler fault",
+            "deviceSerial": "DO-NOT-EXPOSE",
+        }
+        for index in range(25)
+    ]
+    count, details, truncated = _fault_details([{"codes": entries}])
+    assert count == 25
+    assert len(details) == 20
+    assert truncated is True
+    assert "HTTPS://unsafe.example" not in str(details)
+    assert "DO-NOT-EXPOSE" not in str(details)
+    assert _fault_details([{"codes": "not-an-array"}])[0] is None
 
 
 async def test_failed_endpoint_is_unknown_not_reported_healthy(hass):
