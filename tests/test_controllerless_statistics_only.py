@@ -252,7 +252,6 @@ async def test_name_refresh_waits_until_profile_is_discovered(hass):
     """A transient empty fetch must not consume the queued metadata rename."""
     source = _make_sensor(hass, _make_buckets([100.0]))
     coordinator = source.coordinator
-    system_id = source.system_id
     saved = coordinator.data
     coordinator.data = {}
     manager = HourlyStatisticsManager(hass, coordinator, "test-entry")
