@@ -18,11 +18,14 @@ from zoneinfo import ZoneInfo
 from aiohttp import ClientResponseError
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.statistics import statistics_during_period
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.event import async_track_time_change
 from homeassistant.helpers.storage import Store
 
-from .const import CONTROLLERLESS_ENERGY_NAMES
+from .connectivity_diagnostics import device_info
+from .const import CONTROLLERLESS_ENERGY_NAMES, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -366,3 +369,49 @@ class HistoricalReconciliation:
             end = first_this_month - timedelta(days=1)
             start = date(end.year, end.month, 1)
             await self._run(start, end, refresh_report=True)
+
+
+class HistoricalQualitySensor(SensorEntity):
+    """Read-only diagnostic for the most recent historical comparison."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_icon = "mdi:chart-timeline-variant"
+
+    def __init__(
+        self, system_id: str, device_uuid: str,
+        diagnostics: HistoricalReconciliation,
+    ) -> None:
+        self.diagnostics = diagnostics
+        self._attr_name = "Vaillant Historical Energy Quality"
+        self._attr_unique_id = (
+            f"{DOMAIN}_{system_id}_{device_uuid}_historical_energy_quality"
+        )
+        self._attr_device_info = device_info(system_id, device_uuid)
+
+    @property
+    def native_value(self) -> str:
+        return self.diagnostics.result.get("status", "not_checked")
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {
+            key: value for key, value in self.diagnostics.result.items()
+            if key not in {"status", "statistics_modified"}
+        }
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            self.diagnostics.async_add_listener(self.async_write_ha_state)
+        )
+
+
+def create_history_sensors(
+    hass: HomeAssistant, entry_id: str
+) -> list[HistoricalQualitySensor]:
+    entry = hass.data[DOMAIN][entry_id]
+    diagnostics: HistoricalReconciliation = entry["historical_diagnostics"]
+    return [
+        HistoricalQualitySensor(system.id, system.devices[0].device_uuid, diagnostics)
+        for system in entry["system_coordinator"].data or []
+        if system.devices
+    ]
