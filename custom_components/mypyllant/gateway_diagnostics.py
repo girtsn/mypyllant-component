@@ -33,6 +33,61 @@ _QUOTA_PAUSE = timedelta(hours=4)
 _SAFE_STATUS = re.compile(r"[A-Z][A-Z_0-9]{0,39}\Z")
 
 
+# The upstream myPyllant fixtures show device buckets containing:
+# {"codes": [{"code": "3", "type": "MAINTENANCE", "title": "...",
+#             "description": "...", "occurrenceTimestamp": "..."}]}
+# Never copy serialNumber, articleNumber, raw device objects or arbitrary fields.
+_FAULT_CODE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,39}\\Z")
+_MAX_FAULT_DETAILS = 20
+
+
+def _safe_fault_text(value: object, *, limit: int) -> str | None:
+    if not isinstance(value, str) or not value or len(value) > limit:
+        return None
+    if not value.isprintable() or "@" in value or "://" in value:
+        return None
+    return value
+
+
+def _fault_details(payload: list) -> tuple[int | None, list[dict], bool]:
+    """Keep a bounded allowlist of fault details while counting all valid codes."""
+    if not all(
+        isinstance(device, dict) and isinstance(device.get("codes"), list)
+        for device in payload
+    ):
+        return None, [], False
+    count = 0
+    details: list[dict] = []
+    for device in payload:
+        for fault in device["codes"]:
+            count += 1
+            if not isinstance(fault, dict) or len(details) >= _MAX_FAULT_DETAILS:
+                continue
+            code = fault.get("code")
+            if not isinstance(code, str) or not _FAULT_CODE.fullmatch(code):
+                continue
+            item = {"code": code}
+            typ = fault.get("type")
+            if isinstance(typ, str) and _SAFE_STATUS.fullmatch(typ):
+                item["type"] = typ
+            title = _safe_fault_text(fault.get("title"), limit=160)
+            description = _safe_fault_text(fault.get("description"), limit=320)
+            if title is not None:
+                item["title"] = title
+            if description is not None:
+                item["description"] = description
+            stamp = fault.get("occurrenceTimestamp")
+            if isinstance(stamp, str) and len(stamp) <= 40:
+                try:
+                    parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                    if parsed.tzinfo is not None:
+                        item["occurred_at"] = parsed.isoformat()
+                except ValueError:
+                    pass
+            details.append(item)
+    return count, details, count > len(details)
+
+
 class GatewayDiagnosticsCoordinator(DataUpdateCoordinator):
     """Poll three verified controller-independent GET routes every four hours."""
 
@@ -79,6 +134,8 @@ class GatewayDiagnosticsCoordinator(DataUpdateCoordinator):
             readings = {
                 "connected": None,
                 "fault_count": None,
+                "fault_details": [],
+                "fault_details_truncated": False,
                 "eebus_enabled": None,
                 "eebus_capable": None,
                 "eebus_status": None,
@@ -115,17 +172,10 @@ class GatewayDiagnosticsCoordinator(DataUpdateCoordinator):
                     if type(connected) is bool:
                         readings["connected"] = connected
                 elif kind == "faults" and isinstance(payload, list):
-                    # Vaillant lists devices, each with a 'codes' array.
-                    # An empty list of devices or empty codes arrays means no
-                    # reported faults. Malformed entries remain unknown.
-                    if all(
-                        isinstance(device, dict)
-                        and isinstance(device.get("codes"), list)
-                        for device in payload
-                    ):
-                        readings["fault_count"] = sum(
-                            len(device["codes"]) for device in payload
-                        )
+                    count, details, truncated = _fault_details(payload)
+                    readings["fault_count"] = count
+                    readings["fault_details"] = details
+                    readings["fault_details_truncated"] = truncated
                 elif kind == "eebus" and isinstance(payload, dict):
                     enabled = payload.get("spineEnabled")
                     capable = payload.get("spineCapable")
@@ -197,7 +247,13 @@ class GatewayDiagnosticBinarySensor(CoordinatorEntity, BinarySensorEntity):
         if not self.available:
             return {}
         if self._kind == "fault_count":
-            return {"reported_fault_count": self._reading["fault_count"]}
+            return {
+                "reported_fault_count": self._reading["fault_count"],
+                "reported_fault_codes": self._reading.get("fault_details", []),
+                "fault_codes_truncated": self._reading.get(
+                    "fault_details_truncated", False
+                ),
+            }
         if self._kind == "eebus_enabled":
             return {
                 "spine_capable": self._reading.get("eebus_capable"),
