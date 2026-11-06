@@ -40,7 +40,11 @@ from .const import (
 )
 from .coordinator import SystemCoordinator, DailyDataCoordinator
 from .hourly_statistics import HourlyStatisticsManager
-from .connectivity_diagnostics import CloudHealth, create_cloud_binary_sensors, create_cloud_diagnostic_sensors
+from .connectivity_diagnostics import (
+    CloudHealth,
+    create_cloud_binary_sensors,
+    create_cloud_diagnostic_sensors,
+)
 from .history_diagnostics import HistoricalReconciliation, create_history_sensors
 
 _LOGGER = logging.getLogger(__name__)
@@ -197,11 +201,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             DOMAIN,
             "reconcile_energy_history",
             handle_reconcile,
-            schema=vol.Schema({
-                vol.Required("start_date"): vol.Coerce(date.fromisoformat),
-                vol.Required("end_date"): vol.Coerce(date.fromisoformat),
-                vol.Optional("refresh_report", default=False): bool,
-            }),
+            schema=vol.Schema(
+                {
+                    vol.Required("start_date"): vol.Coerce(date.fromisoformat),
+                    vol.Required("end_date"): vol.Coerce(date.fromisoformat),
+                    vol.Optional("refresh_report", default=False): bool,
+                }
+            ),
             supports_response=SupportsResponse.ONLY,
         )
 

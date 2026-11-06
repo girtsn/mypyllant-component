@@ -28,16 +28,21 @@ ZONE = ZoneInfo("Europe/Brussels")
 
 def report_csv(day: date, values=(24, 48, 72, 96)) -> str:
     return (
-        "DateTime;" + ";".join(REPORT_COLUMNS) + "\n"
-        + day.isoformat() + ";" + ";".join(map(str, values)) + "\n"
+        "DateTime;"
+        + ";".join(REPORT_COLUMNS)
+        + "\n"
+        + day.isoformat()
+        + ";"
+        + ";".join(map(str, values))
+        + "\n"
     )
 
 
 def hourly_rows(day: date, hourly_wh: int) -> list[dict]:
     start = datetime.combine(day, time.min, ZONE).astimezone(timezone.utc)
-    finish = datetime.combine(
-        day + timedelta(days=1), time.min, ZONE
-    ).astimezone(timezone.utc)
+    finish = datetime.combine(day + timedelta(days=1), time.min, ZONE).astimezone(
+        timezone.utc
+    )
     expected = round((finish - start).total_seconds() / 3600)
     return [
         {
@@ -52,10 +57,15 @@ def hourly_rows(day: date, hourly_wh: int) -> list[dict]:
 def test_validate_report_and_never_accept_missing_dates_as_zero():
     day = date(2025, 6, 24)
     assert parse_annual_report(report_csv(day), 2025)[day] == (
-        Decimal(24), Decimal(48), Decimal(72), Decimal(96)
+        Decimal(24),
+        Decimal(48),
+        Decimal(72),
+        Decimal(96),
     )
     with pytest.raises(ValueError):
-        parse_annual_report(report_csv(day) + report_csv(day).splitlines()[1] + "\n", 2025)
+        parse_annual_report(
+            report_csv(day) + report_csv(day).splitlines()[1] + "\n", 2025
+        )
     with pytest.raises(ValueError):
         parse_annual_report(report_csv(day), 2024)
     with pytest.raises(ValueError):
@@ -66,8 +76,7 @@ def test_validate_report_and_never_accept_missing_dates_as_zero():
 
 @pytest.mark.parametrize(
     ("day", "hours"),
-    [(date(2026, 3, 29), 23), (date(2026, 10, 25), 25),
-     (date(2026, 11, 1), 24)],
+    [(date(2026, 3, 29), 23), (date(2026, 10, 25), 25), (date(2026, 11, 1), 24)],
 )
 def test_reconciliation_uses_correct_dst_day_length(day, hours):
     rows = hourly_rows(day, 10)
@@ -83,7 +92,9 @@ def test_zero_hourly_readings_do_not_look_like_valid_consumption():
     result = summarize_day(day, rows, Decimal(1200), ZONE)
     assert result["status"] == "mismatch"
     assert result["difference_wh"] == -1200
-    assert summarize_day(day, rows[:-1], Decimal(1200), ZONE)["status"] == "hourly_missing"
+    assert (
+        summarize_day(day, rows[:-1], Decimal(1200), ZONE)["status"] == "hourly_missing"
+    )
     assert summarize_day(day, rows, None, ZONE)["status"] == "report_missing"
 
 
@@ -113,9 +124,12 @@ def test_cloud_connectivity_uses_real_on_off_and_stays_available(hass):
     health._system_refreshed()
     assert connected.is_on is True
     assert health.consecutive_failures == 0
-    assert CloudDiagnosticSensor(
-        "system-1", "device-1", health, "last_api_contact"
-    ).native_value is not None
+    assert (
+        CloudDiagnosticSensor(
+            "system-1", "device-1", health, "last_api_contact"
+        ).native_value
+        is not None
+    )
     health.stop()
 
 
@@ -134,7 +148,10 @@ async def test_yearly_report_reconciliation_uses_original_ids_and_cache(hass):
         api=reports,
         _refresh_session=AsyncMock(),
     )
-    ids = {profile: f"mypyllant:real-stable-{index}" for index, profile in enumerate(PROFILE_ORDER)}
+    ids = {
+        profile: f"mypyllant:real-stable-{index}"
+        for index, profile in enumerate(PROFILE_ORDER)
+    }
     manager = SimpleNamespace(profile_statistics=lambda: ids)
     diagnostics = HistoricalReconciliation(hass, "entry1", system, manager)
     diagnostics.store = SimpleNamespace(async_save=AsyncMock())
@@ -157,16 +174,12 @@ async def test_yearly_report_reconciliation_uses_original_ids_and_cache(hass):
     assert reports.get_yearly_reports.call_count == 1
     entity = HistoricalQualitySensor("system1", "device1", diagnostics)
     assert entity.native_value == "verified"
-    assert entity.device_info["identifiers"] == {
-        (DOMAIN, "system1_device_device1")
-    }
+    assert entity.device_info["identifiers"] == {(DOMAIN, "system1_device_device1")}
 
 
 async def test_monthly_reconciliation_never_refetches_after_restart_marker(hass):
     system = SimpleNamespace(data=[])
-    diagnostics = HistoricalReconciliation(
-        hass, "entry1", system, SimpleNamespace()
-    )
+    diagnostics = HistoricalReconciliation(hass, "entry1", system, SimpleNamespace())
     diagnostics.store = SimpleNamespace(async_save=AsyncMock())
     diagnostics.last_checked_month = datetime.now(ZONE).strftime("%Y-%m")
     with patch.object(diagnostics, "_run", new_callable=AsyncMock) as run:
@@ -179,9 +192,7 @@ async def test_unavailable_report_does_not_modify_recorder(hass):
     manager = SimpleNamespace(profile_statistics=lambda: {})
     diagnostics = HistoricalReconciliation(hass, "entry1", system, manager)
     diagnostics.store = SimpleNamespace(async_save=AsyncMock())
-    result = await diagnostics.async_reconcile(
-        date(2025, 6, 1), date(2025, 6, 2)
-    )
+    result = await diagnostics.async_reconcile(date(2025, 6, 1), date(2025, 6, 2))
     assert result["status"] == "error"
     assert result["reason"] == "energy_profiles_not_discovered"
     assert not result.get("statistics_modified", False)

@@ -114,9 +114,7 @@ class CloudHealth:
 
 def device_info(system_id: str, device_uuid: str) -> DeviceInfo:
     """Use the existing ecoTEC device registry identifier; do not make a new hub."""
-    return DeviceInfo(
-        identifiers={(DOMAIN, f"{system_id}_device_{device_uuid}")}
-    )
+    return DeviceInfo(identifiers={(DOMAIN, f"{system_id}_device_{device_uuid}")})
 
 
 class CloudConnectionEntity(BinarySensorEntity):
@@ -149,9 +147,7 @@ class CloudConnectionEntity(BinarySensorEntity):
         return {"failure_reason": self.health.failure_reason}
 
     async def async_added_to_hass(self) -> None:
-        self.async_on_remove(
-            self.health.async_add_listener(self.async_write_ha_state)
-        )
+        self.async_on_remove(self.health.async_add_listener(self.async_write_ha_state))
 
 
 class CloudDiagnosticSensor(SensorEntity):
@@ -191,9 +187,7 @@ class CloudDiagnosticSensor(SensorEntity):
         return getattr(self.health, self.kind)
 
     async def async_added_to_hass(self) -> None:
-        self.async_on_remove(
-            self.health.async_add_listener(self.async_write_ha_state)
-        )
+        self.async_on_remove(self.health.async_add_listener(self.async_write_ha_state))
 
 
 def create_cloud_binary_sensors(
@@ -214,9 +208,7 @@ def create_cloud_diagnostic_sensors(
     entry = hass.data[DOMAIN][entry_id]
     health: CloudHealth = entry["cloud_health"]
     return [
-        CloudDiagnosticSensor(
-            system.id, system.devices[0].device_uuid, health, kind
-        )
+        CloudDiagnosticSensor(system.id, system.devices[0].device_uuid, health, kind)
         for system in entry["system_coordinator"].data or []
         if system.devices
         for kind in CloudDiagnosticSensor.TYPES

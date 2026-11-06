@@ -10,7 +10,6 @@ import asyncio
 import csv
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal, InvalidOperation
-from functools import partial
 from io import StringIO
 import logging
 from zoneinfo import ZoneInfo
@@ -45,7 +44,8 @@ def parse_annual_report(content: str, year: int) -> dict[date, tuple[Decimal, ..
     if not isinstance(content, str) or len(content) > MAX_CSV_SIZE:
         raise ValueError("report_invalid")
     cleaned = "\n".join(
-        line for line in content.lstrip("\ufeff").splitlines()
+        line
+        for line in content.lstrip("\ufeff").splitlines()
         if line.strip() and not line.lstrip().startswith("#")
     )
     reader = csv.DictReader(StringIO(cleaned), delimiter=";")
@@ -56,7 +56,13 @@ def parse_annual_report(content: str, year: int) -> dict[date, tuple[Decimal, ..
         try:
             day = date.fromisoformat(row["DateTime"].strip()[:10])
             values = tuple(Decimal(row[key].strip()) for key in REPORT_COLUMNS)
-        except (KeyError, TypeError, AttributeError, ValueError, InvalidOperation) as err:
+        except (
+            KeyError,
+            TypeError,
+            AttributeError,
+            ValueError,
+            InvalidOperation,
+        ) as err:
             raise ValueError("report_invalid") from err
         if (
             day.year != year
@@ -97,7 +103,8 @@ def summarize_day(
     elif len(rows) != expected:
         result["status"] = "hourly_missing"
     elif any(
-        previous.get("sum") is None or current.get("sum") is None
+        previous.get("sum") is None
+        or current.get("sum") is None
         or current["sum"] < previous["sum"] - 0.01
         for previous, current in zip(rows, rows[1:])
     ):
@@ -112,19 +119,14 @@ def summarize_day(
             first.get("sum") is None
             or first.get("state") is None
             or last.get("sum") is None
-            or abs(
-                (last["sum"] - first["sum"] + first["state"])
-                - last["state"]
-            ) > 1
+            or abs((last["sum"] - first["sum"] + first["state"]) - last["state"]) > 1
         ):
             result["status"] = "counter_discontinuity"
         else:
             diff = Decimal(str(last["state"])) - reported_wh
             result["difference_wh"] = float(diff)
             tolerance = max(Decimal("10"), reported_wh * Decimal("0.01"))
-            result["status"] = (
-                "verified" if abs(diff) <= tolerance else "mismatch"
-            )
+            result["status"] = "verified" if abs(diff) <= tolerance else "mismatch"
     return result
 
 
@@ -215,9 +217,9 @@ class HistoricalReconciliation:
         # Use the authenticated myPyllant client and existing session.
         # Never retry quota/auth failures automatically.
         await self.system._refresh_session()
-        reports = [report async for report in self.system.api.get_yearly_reports(
-            system, year
-        )]
+        reports = [
+            report async for report in self.system.api.get_yearly_reports(system, year)
+        ]
         if len(reports) != 1:
             raise ValueError("unexpected_report_count")
         values = parse_annual_report(reports[0].file_content, year)
@@ -241,10 +243,7 @@ class HistoricalReconciliation:
 
     async def _run(self, start: date, end: date, refresh_report: bool) -> dict:
         today = datetime.now(self.zone).date()
-        if (
-            start > end or end >= today
-            or (end - start).days >= MAX_RANGE_DAYS
-        ):
+        if start > end or end >= today or (end - start).days >= MAX_RANGE_DAYS:
             return {"status": "invalid_range", "statistics_modified": False}
         try:
             system = self._single_system()
@@ -256,9 +255,7 @@ class HistoricalReconciliation:
             for year in range(start.year, end.year + 1):
                 # Only fetch completed years from cache; the current year is
                 # refreshed monthly (or on an explicit user request).
-                year_values = await self._get_report(
-                    system, year, refresh_report
-                )
+                year_values = await self._get_report(system, year, refresh_report)
                 daily.update(year_values)
 
             begin = datetime.combine(start, time.min, self.zone).astimezone(
@@ -269,7 +266,12 @@ class HistoricalReconciliation:
             ).astimezone(timezone.utc)
             rows = await get_instance(self.hass).async_add_executor_job(
                 statistics_during_period,
-                self.hass, begin, finish, set(ids.values()), "hour", None,
+                self.hass,
+                begin,
+                finish,
+                set(ids.values()),
+                "hour",
+                None,
                 {"sum", "state"},
             )
             mismatched: set[str] = set()
@@ -284,7 +286,8 @@ class HistoricalReconciliation:
                 for index, profile in enumerate(PROFILE_ORDER):
                     source = daily.get(day)
                     compared = summarize_day(
-                        day, rows.get(ids[profile], []),
+                        day,
+                        rows.get(ids[profile], []),
                         source[index] if source is not None else None,
                         self.zone,
                     )
@@ -307,9 +310,7 @@ class HistoricalReconciliation:
                 date_results[day.isoformat()] = statuses
 
             state = (
-                "mismatch" if mismatched
-                else "incomplete" if incomplete
-                else "verified"
+                "mismatch" if mismatched else "incomplete" if incomplete else "verified"
             )
             self.result = {
                 "status": state,
@@ -329,21 +330,27 @@ class HistoricalReconciliation:
         except ClientResponseError as err:
             status = getattr(err, "status", 0)
             reason = (
-                "rate_limited" if status == 429
-                else "authentication" if status == 401
-                else "forbidden_or_quota" if status == 403
+                "rate_limited"
+                if status == 429
+                else "authentication"
+                if status == 401
+                else "forbidden_or_quota"
+                if status == 403
                 else "report_request_failed"
             )
             self.result = {"status": "error", "reason": reason}
-        except (TimeoutError, OSError):
+        except TimeoutError, OSError:
             self.result = {"status": "error", "reason": "api_unavailable"}
         except ValueError as err:
             # Only known sanitized validation codes, never full API bodies.
             reason = str(err)
             allowed = {
-                "requires_one_system", "energy_profiles_not_discovered",
-                "unexpected_report_count", "report_invalid",
-                "report_columns_changed", "report_empty",
+                "requires_one_system",
+                "energy_profiles_not_discovered",
+                "unexpected_report_count",
+                "report_invalid",
+                "report_columns_changed",
+                "report_empty",
             }
             self.result = {
                 "status": "error",
@@ -378,7 +385,9 @@ class HistoricalQualitySensor(SensorEntity):
     _attr_icon = "mdi:chart-timeline-variant"
 
     def __init__(
-        self, system_id: str, device_uuid: str,
+        self,
+        system_id: str,
+        device_uuid: str,
         diagnostics: HistoricalReconciliation,
     ) -> None:
         self.diagnostics = diagnostics
@@ -395,7 +404,8 @@ class HistoricalQualitySensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict:
         return {
-            key: value for key, value in self.diagnostics.result.items()
+            key: value
+            for key, value in self.diagnostics.result.items()
             if key not in {"status", "statistics_modified"}
         }
 
