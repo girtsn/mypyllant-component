@@ -48,7 +48,7 @@ from custom_components.mypyllant.utils import (
 from myPyllant.utils import prepare_field_value_for_dict
 
 from . import DailyDataCoordinator, SystemCoordinator
-from .const import DOMAIN
+from .const import DOMAIN, CONTROLLERLESS_ENERGY_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -313,9 +313,13 @@ async def create_daily_data_sensors(
 async def async_setup_entry(
     hass: HomeAssistant, config: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    # The four energy series are published as external mypyllant:* statistics
-    # by HourlyStatisticsManager, not as duplicate daily-reset sensor entities.
-    async_add_entities(await create_system_sensors(hass, config))  # type: ignore
+    # Only the four recorder statistics have long-term energy history.
+    # These read-only device sensors show today's value without a state class,
+    # preventing any duplicate energy statistics.
+    sensors = await create_system_sensors(hass, config)
+    if hass.data[DOMAIN][config.entry_id].get("controllerless"):
+        sensors.extend(create_controllerless_energy_sensors(hass, config))
+    async_add_entities(sensors)  # type: ignore
 
 
 class SystemSensor(SystemCoordinatorEntity, SensorEntity):
@@ -1159,6 +1163,72 @@ class DataSensor(CoordinatorEntity, SensorEntity):
             ),
             stats,
         )
+
+
+
+class ControllerlessTodayEnergySensor(DataSensor):
+    """A device-page display of today's energy, not a Recorder statistics source.
+
+    The four long-term hourly profiles continue to be written exclusively as
+    external mypyllant:* statistics, retaining all existing Energy history.
+    """
+
+    _attr_state_class = None
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    @property
+    def unique_id(self) -> str | None:
+        old_id = super().unique_id
+        return f"{old_id}_today" if old_id else None
+
+    @property
+    def name(self) -> str:
+        data = self.device_data
+        if data is None:
+            return "Energy Today"
+        label = CONTROLLERLESS_ENERGY_NAMES.get(
+            (data.energy_type, data.operation_mode), "Energy"
+        )
+        return f"{label} Today"
+
+    @property
+    def native_value(self) -> float | None:
+        if self.device_data is None:
+            return None
+        return round(self.today_total_consumption / 1000, 2)
+
+    async def async_added_to_hass(self) -> None:
+        # Do not invoke DataSensor's own Recorder writer.
+        await CoordinatorEntity.async_added_to_hass(self)
+        self._unsub_midnight = async_track_time_change(
+            self.hass, self._handle_midnight, hour=0, minute=0, second=1
+        )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        # A state update only; external hourly statistics have their own manager.
+        self.async_write_ha_state()
+
+
+def create_controllerless_energy_sensors(
+    hass: HomeAssistant, config: ConfigEntry
+) -> EntityList[SensorEntity]:
+    """Expose four compact device readings without duplicate statistics."""
+    coordinator: DailyDataCoordinator = hass.data[DOMAIN][config.entry_id][
+        "daily_data_coordinator"
+    ]
+    sensors: EntityList[SensorEntity] = EntityList()
+    for system_id, system_data in (coordinator.data or {}).items():
+        for device_index, dataset in enumerate(system_data["devices_data"]):
+            for data_index, data in enumerate(dataset):
+                if (data.energy_type, data.operation_mode) not in CONTROLLERLESS_ENERGY_NAMES:
+                    continue
+                sensors.append(
+                    lambda si=system_id, di=device_index, ai=data_index: (
+                        ControllerlessTodayEnergySensor(si, di, ai, coordinator)
+                    )
+                )
+    return sensors
 
 
 class EfficiencySensor(CoordinatorEntity, SensorEntity):
