@@ -1,6 +1,6 @@
 """Tests for read-only controllerless Vaillant cloud gateway diagnostics."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -65,9 +65,15 @@ async def test_successful_diagnostics_with_empty_faults(hass):
     }
     assert "SENSITIVE" not in str(data)
     coordinator.async_set_updated_data(data)
-    connected = GatewayDiagnosticBinarySensor(coordinator, "system-1", "boiler-1", "connected")
-    faults = GatewayDiagnosticBinarySensor(coordinator, "system-1", "boiler-1", "fault_count")
-    eebus = GatewayDiagnosticBinarySensor(coordinator, "system-1", "boiler-1", "eebus_enabled")
+    connected = GatewayDiagnosticBinarySensor(
+        coordinator, "system-1", "boiler-1", "connected"
+    )
+    faults = GatewayDiagnosticBinarySensor(
+        coordinator, "system-1", "boiler-1", "fault_count"
+    )
+    eebus = GatewayDiagnosticBinarySensor(
+        coordinator, "system-1", "boiler-1", "eebus_enabled"
+    )
     assert connected.available and connected.is_on is True
     assert faults.available and faults.is_on is False
     assert faults.extra_state_attributes == {"reported_fault_count": 0}
@@ -80,15 +86,25 @@ async def test_successful_diagnostics_with_empty_faults(hass):
 
 async def test_positive_faults_and_gateway_off(hass):
     coordinator, source = _gateway(hass)
-    coordinator._request = AsyncMock(side_effect=[
-        {"connected": False},
-        [{"codes": ["F.01"], "serialNumber": "SECRET"}, {"codes": ["F.02"]}],
-        {"spineEnabled": False, "spineCapable": True, "spineEnabledStatus": "DETERMINED"},
-    ])
+    coordinator._request = AsyncMock(
+        side_effect=[
+            {"connected": False},
+            [{"codes": ["F.01"], "serialNumber": "SECRET"}, {"codes": ["F.02"]}],
+            {
+                "spineEnabled": False,
+                "spineCapable": True,
+                "spineEnabledStatus": "DETERMINED",
+            },
+        ]
+    )
     data = await coordinator._async_update_data()
     coordinator.async_set_updated_data(data)
-    connected = GatewayDiagnosticBinarySensor(coordinator, "system-1", "boiler-1", "connected")
-    faults = GatewayDiagnosticBinarySensor(coordinator, "system-1", "boiler-1", "fault_count")
+    connected = GatewayDiagnosticBinarySensor(
+        coordinator, "system-1", "boiler-1", "connected"
+    )
+    faults = GatewayDiagnosticBinarySensor(
+        coordinator, "system-1", "boiler-1", "fault_count"
+    )
     assert connected.is_on is False
     assert faults.is_on is True
     assert faults.extra_state_attributes["reported_fault_count"] == 2
@@ -97,28 +113,42 @@ async def test_positive_faults_and_gateway_off(hass):
 
 async def test_failed_endpoint_is_unknown_not_reported_healthy(hass):
     coordinator, _ = _gateway(hass)
-    coordinator._request = AsyncMock(side_effect=[
-        {"connected": True},
-        ClientResponseError(
-            request_info=MagicMock(real_url="https://api.example.invalid"),
-            history=(), status=404, message="not found",
-        ),
-        {"spineEnabled": True, "spineCapable": True, "spineEnabledStatus": "DETERMINED"},
-    ])
+    coordinator._request = AsyncMock(
+        side_effect=[
+            {"connected": True},
+            ClientResponseError(
+                request_info=MagicMock(real_url="https://api.example.invalid"),
+                history=(),
+                status=404,
+                message="not found",
+            ),
+            {
+                "spineEnabled": True,
+                "spineCapable": True,
+                "spineEnabledStatus": "DETERMINED",
+            },
+        ]
+    )
     data = await coordinator._async_update_data()
     assert data["system-1"]["fault_count"] is None
     coordinator.async_set_updated_data(data)
-    faults = GatewayDiagnosticBinarySensor(coordinator, "system-1", "boiler-1", "fault_count")
+    faults = GatewayDiagnosticBinarySensor(
+        coordinator, "system-1", "boiler-1", "fault_count"
+    )
     assert not faults.available
     assert faults.is_on is None
 
 
 async def test_quota_error_stops_subsequent_requests_and_pauses(hass):
     coordinator, _ = _gateway(hass)
-    coordinator._request = AsyncMock(side_effect=ClientResponseError(
-        request_info=MagicMock(real_url="https://api.example.invalid"),
-        history=(), status=429, message="quota",
-    ))
+    coordinator._request = AsyncMock(
+        side_effect=ClientResponseError(
+            request_info=MagicMock(real_url="https://api.example.invalid"),
+            history=(),
+            status=429,
+            message="quota",
+        )
+    )
     with pytest.raises(UpdateFailed):
         await coordinator._async_update_data()
     assert coordinator._request.await_count == 1
@@ -130,15 +160,23 @@ async def test_quota_error_stops_subsequent_requests_and_pauses(hass):
 
 async def test_bad_payloads_do_not_become_false_healthy_states(hass):
     coordinator, _ = _gateway(hass)
-    coordinator._request = AsyncMock(side_effect=[
-        {"connected": "false"},
-        {"codes": []},
-        {"spineEnabled": "false", "spineCapable": 1, "spineEnabledStatus": "private text"},
-    ])
+    coordinator._request = AsyncMock(
+        side_effect=[
+            {"connected": "false"},
+            {"codes": []},
+            {
+                "spineEnabled": "false",
+                "spineCapable": 1,
+                "spineEnabledStatus": "private text",
+            },
+        ]
+    )
     data = await coordinator._async_update_data()
     coordinator.async_set_updated_data(data)
     for kind in ("connected", "fault_count", "eebus_enabled"):
-        entity = GatewayDiagnosticBinarySensor(coordinator, "system-1", "boiler-1", kind)
+        entity = GatewayDiagnosticBinarySensor(
+            coordinator, "system-1", "boiler-1", kind
+        )
         assert not entity.available
         assert entity.is_on is None
 

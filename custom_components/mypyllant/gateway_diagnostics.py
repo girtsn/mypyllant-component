@@ -35,7 +35,9 @@ _SAFE_STATUS = re.compile(r"[A-Z][A-Z_0-9]{0,39}\Z")
 class GatewayDiagnosticsCoordinator(DataUpdateCoordinator):
     """Poll three verified controller-independent GET routes every four hours."""
 
-    def __init__(self, hass: HomeAssistant, system_coordinator: DataUpdateCoordinator) -> None:
+    def __init__(
+        self, hass: HomeAssistant, system_coordinator: DataUpdateCoordinator
+    ) -> None:
         super().__init__(
             hass,
             _LOGGER,
@@ -55,7 +57,9 @@ class GatewayDiagnosticsCoordinator(DataUpdateCoordinator):
 
     async def _async_update_data(self):
         if self._pause_until and datetime.now(timezone.utc) < self._pause_until:
-            raise UpdateFailed("Vaillant diagnostic requests paused after authentication/quota error")
+            raise UpdateFailed(
+                "Vaillant diagnostic requests paused after authentication/quota error"
+            )
 
         systems = list(self.system_coordinator.data or [])
         if not systems:
@@ -94,7 +98,9 @@ class GatewayDiagnosticsCoordinator(DataUpdateCoordinator):
                             f"Vaillant gateway diagnostics paused (HTTP {err.status})"
                         ) from err
                     _LOGGER.debug(
-                        "Vaillant %s diagnostics unavailable (HTTP %s)", kind, err.status
+                        "Vaillant %s diagnostics unavailable (HTTP %s)",
+                        kind,
+                        err.status,
                     )
                     continue
                 except Exception as err:
@@ -148,9 +154,7 @@ class GatewayDiagnosticBinarySensor(CoordinatorEntity, BinarySensorEntity):
         self._kind = kind
         title, device_class = self.KINDS[kind]
         self._attr_name = f"Vaillant {title}"
-        self._attr_unique_id = (
-            f"{DOMAIN}_{system_id}_{device_uuid}_gateway_{kind}"
-        )
+        self._attr_unique_id = f"{DOMAIN}_{system_id}_{device_uuid}_gateway_{kind}"
         self._attr_device_info = device_info(system_id, device_uuid)
         if device_class is not None:
             self._attr_device_class = device_class
@@ -193,14 +197,18 @@ class GatewayDiagnosticBinarySensor(CoordinatorEntity, BinarySensorEntity):
         return {}
 
 
-def create_gateway_binary_sensors(hass: HomeAssistant, entry_id: str) -> list[GatewayDiagnosticBinarySensor]:
+def create_gateway_binary_sensors(
+    hass: HomeAssistant, entry_id: str
+) -> list[GatewayDiagnosticBinarySensor]:
     """Create three diagnostics per detected ecoTEC, without new devices."""
     record = hass.data[DOMAIN][entry_id]
     coordinator = record.get("gateway_diagnostics")
     if coordinator is None:
         return []
     return [
-        GatewayDiagnosticBinarySensor(coordinator, system.id, system.devices[0].device_uuid, kind)
+        GatewayDiagnosticBinarySensor(
+            coordinator, system.id, system.devices[0].device_uuid, kind
+        )
         for system in record["system_coordinator"].data or []
         if system.devices
         for kind in GatewayDiagnosticBinarySensor.KINDS
