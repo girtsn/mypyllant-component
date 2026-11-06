@@ -412,3 +412,32 @@ report:
         number:
           step: 1
           mode: box
+
+reconcile_energy_history:
+  name: Reconcile Vaillant historical energy
+  description: >-
+    Read-only comparison of the four existing hourly Recorder statistics with
+    Vaillant annual-report daily totals. Uses cached annual reports where possible;
+    the current-year report is refreshed automatically once per month. Does not
+    change or backfill any statistics. An explicitly requested refresh may use
+    one Vaillant API call per year (maximum two years per action).
+  fields:
+    start_date:
+      name: First day
+      description: First complete local calendar day to compare (YYYY-MM-DD).
+      required: true
+      selector:
+        date:
+    end_date:
+      name: Last day
+      description: Last complete local calendar day (up to 31 days inclusive).
+      required: true
+      selector:
+        date:
+    refresh_report:
+      name: Refresh Vaillant annual report
+      description: Bypass cached reports; use sparingly to avoid API rate limits.
+      required: false
+      default: false
+      selector:
+        boolean:
