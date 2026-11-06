@@ -75,3 +75,11 @@ WEEKDAYS_TO_RFC5545 = {
     "sunday": "SU",
 }
 RFC5545_TO_WEEKDAYS = {v: k for k, v in WEEKDAYS_TO_RFC5545.items()}
+
+# Friendly names for the four unchanged external Recorder statistic IDs.
+CONTROLLERLESS_ENERGY_NAMES = {
+    ("CONSUMED_PRIMARY_ENERGY", "HEATING"): "Gas Heating",
+    ("CONSUMED_PRIMARY_ENERGY", "DOMESTIC_HOT_WATER"): "Gas Hot Water",
+    ("CONSUMED_ELECTRICAL_ENERGY", "HEATING"): "Electricity Heating",
+    ("CONSUMED_ELECTRICAL_ENERGY", "DOMESTIC_HOT_WATER"): "Electricity Hot Water",
+}

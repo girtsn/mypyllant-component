@@ -48,7 +48,7 @@ from custom_components.mypyllant.utils import (
 from myPyllant.utils import prepare_field_value_for_dict
 
 from . import DailyDataCoordinator, SystemCoordinator
-from .const import DOMAIN
+from .const import DOMAIN, CONTROLLERLESS_ENERGY_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -313,9 +313,13 @@ async def create_daily_data_sensors(
 async def async_setup_entry(
     hass: HomeAssistant, config: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    # The four energy series are published as external mypyllant:* statistics
-    # by HourlyStatisticsManager, not as duplicate daily-reset sensor entities.
-    async_add_entities(await create_system_sensors(hass, config))  # type: ignore
+    # Only the four recorder statistics have long-term energy history.
+    # These read-only device sensors show today's value without a state class,
+    # preventing any duplicate energy statistics.
+    sensors = await create_system_sensors(hass, config)
+    if hass.data[DOMAIN][config.entry_id].get("controllerless"):
+        sensors.extend(create_controllerless_energy_sensors(hass, config))
+    async_add_entities(sensors)  # type: ignore
 
 
 class SystemSensor(SystemCoordinatorEntity, SensorEntity):
@@ -1122,6 +1126,7 @@ class DataSensor(CoordinatorEntity, SensorEntity):
         running_state = 0.0
         current_day = None
         stats: list[StatisticData] = []
+        last_row: StatisticData | None = None
         for bucket in self.device_data.data:
             if bucket.value is None:
                 continue
@@ -1133,17 +1138,22 @@ class DataSensor(CoordinatorEntity, SensorEntity):
                 current_day = bucket_midnight
             running_sum += bucket.value
             running_state += bucket.value
+            last_row = StatisticData(
+                start=bucket.start_date,
+                last_reset=bucket_midnight,
+                sum=running_sum,
+                state=running_state,
+            )
             existing_sum = existing_sums.get(bucket.start_date.timestamp())
             if existing_sum is not None and existing_sum == running_sum:
                 continue
-            stats.append(
-                StatisticData(
-                    start=bucket.start_date,
-                    last_reset=bucket_midnight,
-                    sum=running_sum,
-                    state=running_state,
-                )
-            )
+            stats.append(last_row)
+        if not stats and getattr(self, "_refresh_metadata_if_unchanged", False):
+            # A beta upgrade may have already published all hourly rows with
+            # the old, very long name. Republish only the identical final row
+            # once to update its metadata without altering totals/history.
+            if last_row is not None and existing_sums:
+                stats.append(last_row)
         if not stats:
             return
         async_add_external_statistics(
@@ -1159,6 +1169,85 @@ class DataSensor(CoordinatorEntity, SensorEntity):
             ),
             stats,
         )
+
+
+class ControllerlessTodayEnergySensor(DataSensor):
+    """A device-page display of today's energy, not a Recorder statistics source.
+
+    The four long-term hourly profiles continue to be written exclusively as
+    external mypyllant:* statistics, retaining all existing Energy history.
+    """
+
+    # Unlike the old daily counters, these device readings create no statistics.
+    _attr_state_class = None  # type: ignore[assignment]
+
+    def __init__(
+        self,
+        system_id: str,
+        de_index: int,
+        da_index: int,
+        coordinator: DailyDataCoordinator,
+    ) -> None:
+        super().__init__(system_id, de_index, da_index, coordinator)
+        # DataSensor.__init__ defaults to Wh; these device readings use kWh.
+        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+
+    @property
+    def unique_id(self) -> str | None:
+        old_id = super().unique_id
+        return f"{old_id}_today" if old_id else None
+
+    @property
+    def name(self) -> str:
+        data = self.device_data
+        if data is None or data.energy_type is None:
+            return "Energy Today"
+        label = CONTROLLERLESS_ENERGY_NAMES.get(
+            (data.energy_type, data.operation_mode), "Energy"
+        )
+        return f"{label} Today"
+
+    @property
+    def native_value(self) -> float | None:
+        if self.device_data is None:
+            return None
+        return round(self.today_total_consumption / 1000, 2)
+
+    async def async_added_to_hass(self) -> None:
+        # Do not invoke DataSensor's own Recorder writer.
+        await CoordinatorEntity.async_added_to_hass(self)
+        self._unsub_midnight = async_track_time_change(
+            self.hass, self._handle_midnight, hour=0, minute=0, second=1
+        )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        # A state update only; external hourly statistics have their own manager.
+        self.async_write_ha_state()
+
+
+def create_controllerless_energy_sensors(
+    hass: HomeAssistant, config: ConfigEntry
+) -> EntityList[SensorEntity]:
+    """Expose four compact device readings without duplicate statistics."""
+    coordinator: DailyDataCoordinator = hass.data[DOMAIN][config.entry_id][
+        "daily_data_coordinator"
+    ]
+    sensors: EntityList[SensorEntity] = EntityList()
+    for system_id, system_data in (coordinator.data or {}).items():
+        for device_index, dataset in enumerate(system_data["devices_data"]):
+            for data_index, data in enumerate(dataset):
+                if (
+                    data.energy_type,
+                    data.operation_mode,
+                ) not in CONTROLLERLESS_ENERGY_NAMES:
+                    continue
+                sensors.append(
+                    lambda si=system_id, di=device_index, ai=data_index: (
+                        ControllerlessTodayEnergySensor(si, di, ai, coordinator)
+                    )
+                )
+    return sensors
 
 
 class EfficiencySensor(CoordinatorEntity, SensorEntity):

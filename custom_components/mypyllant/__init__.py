@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime as dt, timedelta
 import voluptuous as vol
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import (
@@ -124,6 +125,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             for system in system_coordinator.data
         )
     )
+    hass.data[DOMAIN][entry.entry_id]["controllerless"] = controllerless
     # Earlier releases could leave this unset, which fetches energy once only.
     # Hourly collection must remain active even if obsolete daily sensors vanish.
     if controllerless and not update_interval_daily:
@@ -151,7 +153,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         manager = HourlyStatisticsManager(hass, daily_data_coordinator, entry.entry_id)
         hass.data[DOMAIN][entry.entry_id]["hourly_statistics_manager"] = manager
         await manager.async_start()
-        manager.remove_legacy_daily_entities()
+        # Compare the existing registry against the exact entities actually
+        # offered by the controllerless setup, including the four new today
+        # readings. Do not remove supported (even user-disabled) entities.
+        from .sensor import (
+            create_system_sensors,
+            create_controllerless_energy_sensors,
+        )
+
+        expected = {
+            sensor.unique_id
+            for sensor in [
+                *(await create_system_sensors(hass, entry)),
+                *create_controllerless_energy_sensors(hass, entry),
+            ]
+            if isinstance(sensor, SensorEntity) and sensor.unique_id is not None
+        }
+        manager.remove_obsolete_entities(expected)
 
     async def handle_export(call: ServiceCall) -> ServiceResponse:
         _LOGGER.debug("Exporting data with params %s", call.data)

@@ -13,24 +13,18 @@ from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 
 from .coordinator import DailyDataCoordinator
-from .sensor import DataSensor, EfficiencySensor
-from .const import DOMAIN
+from .sensor import DataSensor
+from .const import CONTROLLERLESS_ENERGY_NAMES
 
 _LOGGER = logging.getLogger(__name__)
 
-SUPPORTED_PROFILES = {
-    ("CONSUMED_PRIMARY_ENERGY", "HEATING"): "Vaillant Gas Heating",
-    ("CONSUMED_PRIMARY_ENERGY", "DOMESTIC_HOT_WATER"): "Vaillant Gas Hot Water",
-    ("CONSUMED_ELECTRICAL_ENERGY", "HEATING"): "Vaillant Electricity Heating",
-    (
-        "CONSUMED_ELECTRICAL_ENERGY",
-        "DOMESTIC_HOT_WATER",
-    ): "Vaillant Electricity Hot Water",
-}
+SUPPORTED_PROFILES = CONTROLLERLESS_ENERGY_NAMES
 
 
 class _StatisticsOnlyPublisher(DataSensor):
     """Reuse the tested hourly recorder writer without adding a HA sensor."""
+
+    _refresh_metadata_if_unchanged: bool = False
 
     @property
     def name(self) -> str:
@@ -61,6 +55,7 @@ class HourlyStatisticsManager:
         self._tasks: set[asyncio.Task] = set()
         self._publishers: list[_StatisticsOnlyPublisher] = []
         self._profile_ids: set[str] = set()
+        self._refresh_metadata_pending = True
 
     def _build_publishers(self) -> None:
         self._publishers = []
@@ -77,6 +72,9 @@ class HourlyStatisticsManager:
                         system_id, device_index, data_index, self.coordinator
                     )
                     publisher.hass = self.hass
+                    publisher._refresh_metadata_if_unchanged = (
+                        self._refresh_metadata_pending
+                    )
                     if publisher.unique_id is None:
                         continue
                     self._publishers.append(publisher)
@@ -98,6 +96,7 @@ class HourlyStatisticsManager:
             self._build_publishers()
             for publisher in self._publishers:
                 await publisher._safe_write_hourly_statistics()
+            self._refresh_metadata_pending = False
 
     async def async_stop(self) -> None:
         if self._unsubscribe is not None:
@@ -106,35 +105,26 @@ class HourlyStatisticsManager:
         if self._tasks:
             await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
 
-    def remove_legacy_daily_entities(self) -> int:
-        """Remove obsolete entity-registry entries, never delete statistics."""
+    def remove_obsolete_entities(self, active_sensor_unique_ids: set[str]) -> int:
+        """Remove orphaned controller-only entries, preserving active sensors.
+
+        Only entries belonging to this config entry are considered. The
+        Recorder's external mypyllant:* statistics are never touched.
+        """
+        if not active_sensor_unique_ids:
+            _LOGGER.warning("Skipping controllerless entity cleanup: no active sensors")
+            return 0
         registry = er.async_get(self.hass)
         removed = 0
-        unique_ids = set(self._profile_ids)
-        for system_id, system_data in (self.coordinator.data or {}).items():
-            unique_ids.add(
-                EfficiencySensor(system_id, None, self.coordinator).unique_id
-            )
-            for device_index, data_set in enumerate(system_data["devices_data"]):
-                if data_set:
-                    unique_ids.add(
-                        EfficiencySensor(
-                            system_id, device_index, self.coordinator
-                        ).unique_id
-                    )
-        for unique_id in unique_ids:
-            entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
-            if entity_id is None:
+        for entry in er.async_entries_for_config_entry(registry, self.entry_id):
+            if entry.domain == "sensor" and entry.unique_id in active_sensor_unique_ids:
                 continue
-            entry = registry.async_get(entity_id)
-            if entry is None or entry.config_entry_id != self.entry_id:
-                continue
-            registry.async_remove(entity_id)
+            registry.async_remove(entry.entity_id)
             removed += 1
         if removed:
             _LOGGER.info(
-                "Removed %d obsolete daily energy/efficiency entities; "
-                "external hourly statistics remain untouched",
+                "Removed %d obsolete controllerless entities; "
+                "Recorder statistics remain untouched",
                 removed,
             )
         return removed

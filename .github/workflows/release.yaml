@@ -1,4 +1,4 @@
-name: Release controllerless-energy beta
+name: Release Vaillant Boiler Monitor
 
 on:
   push:
@@ -42,7 +42,7 @@ jobs:
         run: uv run pytest
 
   release:
-    name: Publish HACS beta release
+    name: Publish stable HACS release
     needs: validate
     runs-on: ubuntu-latest
     steps:
@@ -58,13 +58,13 @@ jobs:
           type: zip
           directory: custom_components/mypyllant
           filename: mypyllant-component.zip
-      - name: Publish prerelease (creates version tag)
+      - name: Publish stable release (creates version tag)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           target_commitish: ${{ github.sha }}
           draft: false
-          prerelease: true
+          prerelease: false
           generate_release_notes: true
-          body_path: BETA_RELEASE_NOTES.md
+          body_path: RELEASE_NOTES.md
           files: custom_components/mypyllant/mypyllant-component.zip
