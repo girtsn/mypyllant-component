@@ -1171,80 +1171,132 @@ class DataSensor(CoordinatorEntity, SensorEntity):
         )
 
 
-class ControllerlessTodayEnergySensor(DataSensor):
-    """A device-page display of today's energy, not a Recorder statistics source.
+class ControllerlessTodayEnergySensor(CoordinatorEntity, SensorEntity):
+    """Read-only today's consumption on the boiler device.
 
-    The four long-term hourly profiles continue to be written exclusively as
-    external mypyllant:* statistics, retaining all existing Energy history.
+    Create the entity from controller-independent EMF profile definitions, not
+    from the transient hourly API response. It remains registered even when an
+    hourly update fails or returns no buckets, and creates no statistics.
     """
 
-    # Unlike the old daily counters, these device readings create no statistics.
-    _attr_state_class = None  # type: ignore[assignment]
+    coordinator: DailyDataCoordinator
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     def __init__(
         self,
         system_id: str,
-        de_index: int,
-        da_index: int,
+        device_index: int,
+        device: Device,
+        energy_type: str,
+        operation_mode: str,
+        home_name: str,
         coordinator: DailyDataCoordinator,
     ) -> None:
-        super().__init__(system_id, de_index, da_index, coordinator)
-        # DataSensor.__init__ defaults to Wh; these device readings use kWh.
-        self._attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
+        super().__init__(coordinator)
+        self.system_id = system_id
+        self.device_index = device_index
+        self.device = device
+        self.energy_type = energy_type
+        self.operation_mode = operation_mode
+        self.home_name = home_name
+        self._unsub_midnight: CALLBACK_TYPE | None = None
 
     @property
-    def unique_id(self) -> str | None:
-        old_id = super().unique_id
-        return f"{old_id}_today" if old_id else None
+    def unique_id(self) -> str:
+        # Stable across changes to the order or availability of data buckets.
+        return (
+            f"{DOMAIN}_{self.system_id}_{self.device.device_uuid}_"
+            f"{self.energy_type.lower()}_{self.operation_mode.lower()}_today"
+        )
 
     @property
     def name(self) -> str:
-        data = self.device_data
-        if data is None or data.energy_type is None:
-            return "Energy Today"
-        label = CONTROLLERLESS_ENERGY_NAMES.get(
-            (data.energy_type, data.operation_mode), "Energy"
-        )
+        label = CONTROLLERLESS_ENERGY_NAMES[(self.energy_type, self.operation_mode)]
         return f"{label} Today"
 
     @property
+    def device_info(self) -> DeviceInfo:
+        # Match the actual boiler's device registry identifier used by
+        # SystemDeviceSensor and the previous energy sensors.
+        return DeviceInfo(
+            identifiers={
+                (DOMAIN, f"{self.system_id}_device_{self.device.device_uuid}")
+            },
+            name=f"{self.home_name} Device {self.device_index} {self.device.name_display}",
+            manufacturer=self.device.brand_name,
+            model=self.device.product_name_display,
+        )
+
+    @property
     def native_value(self) -> float | None:
-        if self.device_data is None:
+        data = (self.coordinator.data or {}).get(self.system_id)
+        if data is None:
             return None
-        return round(self.today_total_consumption / 1000, 2)
+        datasets = data["devices_data"]
+        if self.device_index >= len(datasets):
+            return None
+        for profile in datasets[self.device_index]:
+            if (profile.energy_type, profile.operation_mode) != (
+                self.energy_type,
+                self.operation_mode,
+            ):
+                continue
+            if not profile.data:
+                return None
+            # Use the timezone reported by Vaillant to find today's buckets.
+            today = datetime.now(profile.data[-1].start_date.tzinfo).date()
+            total = sum(
+                bucket.value
+                for bucket in profile.data
+                if bucket.value is not None and bucket.start_date.date() == today
+            )
+            return round(total / 1000, 2)
+        return None
 
     async def async_added_to_hass(self) -> None:
-        # Do not invoke DataSensor's own Recorder writer.
-        await CoordinatorEntity.async_added_to_hass(self)
+        await super().async_added_to_hass()
         self._unsub_midnight = async_track_time_change(
             self.hass, self._handle_midnight, hour=0, minute=0, second=1
         )
 
+    async def async_will_remove_from_hass(self) -> None:
+        if self._unsub_midnight is not None:
+            self._unsub_midnight()
+            self._unsub_midnight = None
+        await super().async_will_remove_from_hass()
+
     @callback
-    def _handle_coordinator_update(self) -> None:
-        # A state update only; external hourly statistics have their own manager.
+    def _handle_midnight(self, _now: datetime) -> None:
         self.async_write_ha_state()
 
 
 def create_controllerless_energy_sensors(
     hass: HomeAssistant, config: ConfigEntry
 ) -> EntityList[SensorEntity]:
-    """Expose four compact device readings without duplicate statistics."""
-    coordinator: DailyDataCoordinator = hass.data[DOMAIN][config.entry_id][
-        "daily_data_coordinator"
-    ]
+    """Always register detected boiler profiles, even with empty hourly data."""
+    entry_data = hass.data[DOMAIN][config.entry_id]
+    system_coordinator: SystemCoordinator = entry_data["system_coordinator"]
+    daily_coordinator: DailyDataCoordinator = entry_data["daily_data_coordinator"]
     sensors: EntityList[SensorEntity] = EntityList()
-    for system_id, system_data in (coordinator.data or {}).items():
-        for device_index, dataset in enumerate(system_data["devices_data"]):
-            for data_index, data in enumerate(dataset):
-                if (
-                    data.energy_type,
-                    data.operation_mode,
-                ) not in CONTROLLERLESS_ENERGY_NAMES:
+    for system in system_coordinator.data or []:
+        home_name = system.home.home_name or system.home.nomenclature
+        for device_index, device in enumerate(system.devices):
+            seen: set[tuple[str, str]] = set()
+            for profile in device.data:
+                key = (profile.energy_type, profile.operation_mode)
+                if key not in CONTROLLERLESS_ENERGY_NAMES or key in seen:
                     continue
+                seen.add(key)
                 sensors.append(
-                    lambda si=system_id, di=device_index, ai=data_index: (
-                        ControllerlessTodayEnergySensor(si, di, ai, coordinator)
+                    ControllerlessTodayEnergySensor(
+                        system.id,
+                        device_index,
+                        device,
+                        key[0],
+                        key[1],
+                        home_name,
+                        daily_coordinator,
                     )
                 )
     return sensors

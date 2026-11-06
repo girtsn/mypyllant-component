@@ -96,7 +96,10 @@ class HourlyStatisticsManager:
             self._build_publishers()
             for publisher in self._publishers:
                 await publisher._safe_write_hourly_statistics()
-            self._refresh_metadata_pending = False
+            # A temporarily empty API response must not consume the first
+            # chance to update Recorder's old, overly long series names.
+            if self._publishers:
+                self._refresh_metadata_pending = False
 
     async def async_stop(self) -> None:
         if self._unsubscribe is not None:
@@ -106,25 +109,41 @@ class HourlyStatisticsManager:
             await asyncio.gather(*tuple(self._tasks), return_exceptions=True)
 
     def remove_obsolete_entities(self, active_sensor_unique_ids: set[str]) -> int:
-        """Remove orphaned controller-only entries, preserving active sensors.
+        """Clean obsolete control entities and positively identified old counters.
 
-        Only entries belonging to this config entry are considered. The
-        Recorder's external mypyllant:* statistics are never touched.
+        Never treat a missing initial hourly API response as evidence that an
+        existing sensor is obsolete. User-disabled and intermittently
+        unavailable boiler diagnostics must not be removed.
         """
         if not active_sensor_unique_ids:
-            _LOGGER.warning("Skipping controllerless entity cleanup: no active sensors")
+            _LOGGER.warning("Skipping controllerless cleanup: no active sensor IDs")
             return 0
         registry = er.async_get(self.hass)
         removed = 0
         for entry in er.async_entries_for_config_entry(registry, self.entry_id):
-            if entry.domain == "sensor" and entry.unique_id in active_sensor_unique_ids:
-                continue
+            if entry.domain == "sensor":
+                if entry.unique_id in active_sensor_unique_ids:
+                    continue
+                # Legacy DataSensor IDs ended in hourly profile/device indexes;
+                # efficiency entities used this explicit suffix. No other
+                # unknown sensors are deleted by the migration.
+                parts = entry.unique_id.rsplit("_", 2)
+                old_daily_counter = (
+                    entry.unique_id.startswith("mypyllant_")
+                    and len(parts) == 3
+                    and parts[-1].isdecimal()
+                    and parts[-2].isdecimal()
+                )
+                old_efficiency = entry.unique_id.endswith("_heating_energy_efficiency")
+                if not (old_daily_counter or old_efficiency):
+                    continue
+            # Controllerless installations expose only the sensor platform.
             registry.async_remove(entry.entity_id)
             removed += 1
         if removed:
             _LOGGER.info(
-                "Removed %d obsolete controllerless entities; "
-                "Recorder statistics remain untouched",
+                "Removed %d confirmed legacy controllerless entities; "
+                "Recorder statistics unchanged",
                 removed,
             )
         return removed

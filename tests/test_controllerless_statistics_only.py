@@ -51,7 +51,7 @@ def test_controllerless_options_only_expose_polling():
 
 
 async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
-    """Friendly device sensors expose consumption without duplicate statistics."""
+    """Create four visible energy entities even when hourly startup data is empty."""
     midnight = datetime.now(timezone.utc).replace(
         hour=0, minute=0, second=0, microsecond=0
     )
@@ -65,21 +65,72 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
             )
         ],
     )
-    mirror = ControllerlessTodayEnergySensor(source.system_id, 0, 0, source.coordinator)
-    mirror.hass = hass
-    assert mirror.native_value == 1.2
-    assert mirror.name == "Electricity Heating Today"
-    assert mirror.unique_id == f"{source.unique_id}_today"
-    assert mirror.device_info == source.device_info
-    assert mirror.state_class is None
-    assert mirror.native_unit_of_measurement == UnitOfEnergy.KILO_WATT_HOUR
-
+    profiles = [
+        ("CONSUMED_PRIMARY_ENERGY", "HEATING"),
+        ("CONSUMED_PRIMARY_ENERGY", "DOMESTIC_HOT_WATER"),
+        ("CONSUMED_ELECTRICAL_ENERGY", "HEATING"),
+        ("CONSUMED_ELECTRICAL_ENERGY", "DOMESTIC_HOT_WATER"),
+    ]
+    device = SimpleNamespace(
+        device_uuid="test-uuid",
+        name_display="ecoTEC",
+        brand_name="Vaillant",
+        product_name_display="ecoTEC",
+        data=[
+            SimpleNamespace(energy_type=kind, operation_mode=mode)
+            for kind, mode in profiles
+        ],
+    )
+    systems = SimpleNamespace(
+        data=[
+            SimpleNamespace(
+                id=source.system_id,
+                devices=[device],
+                home=SimpleNamespace(home_name="Test Home", nomenclature="Test Home"),
+            )
+        ]
+    )
     config = SimpleNamespace(entry_id="test-entry")
-    hass.data[DOMAIN] = {"test-entry": {"daily_data_coordinator": source.coordinator}}
+    saved_data = source.device_data
+    source.coordinator.data = {}
+    hass.data[DOMAIN] = {
+        "test-entry": {
+            "system_coordinator": systems,
+            "daily_data_coordinator": source.coordinator,
+        }
+    }
     sensors = create_controllerless_energy_sensors(hass, config)
-    assert len(sensors) == 1
-    assert sensors[0].unique_id == mirror.unique_id
+    assert len(sensors) == 4
+    assert all(
+        isinstance(sensor, ControllerlessTodayEnergySensor) for sensor in sensors
+    )
+    assert all(sensor.native_value is None for sensor in sensors)
+    assert len({sensor.unique_id for sensor in sensors}) == 4
+    assert all(
+        sensor.device_info["identifiers"]
+        == {(DOMAIN, f"{source.system_id}_device_test-uuid")}
+        for sensor in sensors
+    )
+    assert all(sensor.state_class is None for sensor in sensors)
+    assert all(
+        sensor.native_unit_of_measurement == UnitOfEnergy.KILO_WATT_HOUR
+        for sensor in sensors
+    )
 
+    # Refresh becomes available later: no restart is needed to create entities.
+    source.coordinator.data = {
+        source.system_id: {
+            "home_name": "Test Home",
+            "devices_data": [[saved_data]],
+        }
+    }
+    electric = next(
+        sensor for sensor in sensors if sensor.name == "Electricity Heating Today"
+    )
+    assert electric.native_value == 1.2
+    assert electric.unique_id.endswith("_consumed_electrical_energy_heating_today")
+
+    electric.hass = hass
     with (
         patch(
             "homeassistant.helpers.update_coordinator.CoordinatorEntity.async_added_to_hass",
@@ -89,22 +140,46 @@ async def test_device_energy_today_is_read_only_and_uses_same_boiler(hass):
             "custom_components.mypyllant.sensor.async_add_external_statistics"
         ) as writer,
     ):
-        await mirror.async_added_to_hass()
-        mirror._handle_coordinator_update = MagicMock()
+        await electric.async_added_to_hass()
         writer.assert_not_called()
-    await mirror.async_will_remove_from_hass()
+    await electric.async_will_remove_from_hass()
+
+
+async def test_no_data_does_not_exhaust_metadata_rename(hass):
+    """The first empty Vaillant response must not skip Recorder name migration."""
+    coordinator = MagicMock()
+    coordinator.data = {}
+    manager = HourlyStatisticsManager(hass, coordinator, "test-entry")
+    await manager.async_publish()
+    assert manager._refresh_metadata_pending is True
 
 
 def test_cleanup_removes_orphaned_entities_but_keeps_supported_sensors(hass):
-    """Remove controller-only entities for this entry, not Recorder history."""
+    """Only known legacy IDs and controller-only domains are removed."""
     coordinator = MagicMock()
     manager = HourlyStatisticsManager(hass, coordinator, "test-entry")
     entries = [
         SimpleNamespace(entity_id="sensor.keep", domain="sensor", unique_id="keep"),
-        SimpleNamespace(entity_id="sensor.old_daily", domain="sensor", unique_id="old"),
+        SimpleNamespace(
+            entity_id="sensor.temp_unavailable",
+            domain="sensor",
+            unique_id="mypyllant_optional_diagnostic",
+        ),
+        SimpleNamespace(
+            entity_id="sensor.old_daily",
+            domain="sensor",
+            unique_id="mypyllant_test_system_test-uuid_2_0",
+        ),
+        SimpleNamespace(
+            entity_id="sensor.old_efficiency",
+            domain="sensor",
+            unique_id="mypyllant_test_system_heating_energy_efficiency",
+        ),
         SimpleNamespace(entity_id="switch.away", domain="switch", unique_id="away"),
         SimpleNamespace(
-            entity_id="binary_sensor.old", domain="binary_sensor", unique_id="oldb"
+            entity_id="binary_sensor.old",
+            domain="binary_sensor",
+            unique_id="oldb",
         ),
     ]
     with (
@@ -114,10 +189,15 @@ def test_cleanup_removes_orphaned_entities_but_keeps_supported_sensors(hass):
             return_value=entries,
         ),
     ):
-        assert manager.remove_obsolete_entities({"keep"}) == 3
+        assert manager.remove_obsolete_entities({"keep"}) == 4
         assert {
             call.args[0] for call in get_reg.return_value.async_remove.call_args_list
-        } == {"sensor.old_daily", "switch.away", "binary_sensor.old"}
+        } == {
+            "sensor.old_daily",
+            "sensor.old_efficiency",
+            "switch.away",
+            "binary_sensor.old",
+        }
         get_reg.return_value.async_remove.reset_mock()
         assert manager.remove_obsolete_entities(set()) == 0
         get_reg.return_value.async_remove.assert_not_called()
