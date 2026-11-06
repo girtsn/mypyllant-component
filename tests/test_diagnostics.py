@@ -154,6 +154,9 @@ async def test_yearly_report_reconciliation_uses_original_ids_and_cache(hass):
     }
     manager = SimpleNamespace(profile_statistics=lambda: ids)
     diagnostics = HistoricalReconciliation(hass, "entry1", system, manager)
+    # The test HA fixture defaults to UTC; our synthetic report/rows are
+    # explicitly local Brussels dates and must be compared in that timezone.
+    diagnostics.zone = ZONE
     diagnostics.store = SimpleNamespace(async_save=AsyncMock())
     rows = {
         stat_id: hourly_rows(day, (index + 1))
