@@ -12,3 +12,5 @@ Stable release for read-only Vaillant ecoTEC / VR 921 monitoring with independen
 **After installing:** Restart Home Assistant, confirm four `mypyllant:` statistics still update and are renamed, and check that the obsolete device entries disappear. Take a backup before installing.
 
 Based on upstream [myVAILLANT](https://github.com/signalkraft/mypyllant-component).
+
+**HACS:** After updating from a beta, restart Home Assistant and verify the four existing external `mypyllant:` statistics. No manual deletion of Recorder history is necessary.
