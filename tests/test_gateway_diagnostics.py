@@ -58,6 +58,8 @@ async def test_successful_diagnostics_with_empty_faults(hass):
         "system-1": {
             "connected": True,
             "fault_count": 0,
+            "fault_details": [],
+            "fault_details_truncated": False,
             "eebus_enabled": True,
             "eebus_capable": True,
             "eebus_status": "DETERMINED",
