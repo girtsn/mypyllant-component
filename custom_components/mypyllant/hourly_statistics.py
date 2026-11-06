@@ -24,8 +24,6 @@ SUPPORTED_PROFILES = CONTROLLERLESS_ENERGY_NAMES
 class _StatisticsOnlyPublisher(DataSensor):
     """Reuse the tested hourly recorder writer without adding a HA sensor."""
 
-    _refresh_metadata_if_unchanged: bool = False
-
     @property
     def name(self) -> str:
         if (data := self.device_data) is None:
@@ -72,9 +70,6 @@ class HourlyStatisticsManager:
                         system_id, device_index, data_index, self.coordinator
                     )
                     publisher.hass = self.hass
-                    publisher._refresh_metadata_if_unchanged = (
-                        self._refresh_metadata_pending
-                    )
                     if publisher.unique_id is None:
                         continue
                     self._publishers.append(publisher)
@@ -94,12 +89,24 @@ class HourlyStatisticsManager:
     async def async_publish(self) -> None:
         async with self._lock:
             self._build_publishers()
+            # Home Assistant's external-statistics import updates metadata
+            # even when no statistical rows accompany it. Refresh the name
+            # explicitly instead of rewriting an existing cumulative sum just
+            # to rename its series. The original IDs and values are preserved.
+            if self._refresh_metadata_pending and self._publishers:
+                refreshed = 0
+                for publisher in self._publishers:
+                    if publisher.refresh_hourly_statistic_metadata():
+                        refreshed += 1
+                if refreshed:
+                    self._refresh_metadata_pending = False
+                    _LOGGER.info(
+                        "Queued metadata-only display-name updates for %d Vaillant "
+                        "energy statistics (no energy samples rewritten)",
+                        refreshed,
+                    )
             for publisher in self._publishers:
                 await publisher._safe_write_hourly_statistics()
-            # A temporarily empty API response must not consume the first
-            # chance to update Recorder's old, overly long series names.
-            if self._publishers:
-                self._refresh_metadata_pending = False
 
     async def async_stop(self) -> None:
         if self._unsubscribe is not None:
