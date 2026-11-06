@@ -1049,6 +1049,33 @@ class DataSensor(CoordinatorEntity, SensorEntity):
         )
         self.hass.async_create_task(self._safe_write_hourly_statistics())
 
+    def hourly_statistic_metadata(self) -> StatisticMetaData | None:
+        """Return the existing external-statistic metadata without writing data.
+
+        Keeping the old statistic ID is essential: the Energy dashboard and
+        historical database rows reference it. The publisher overrides name
+        with a short human-readable description.
+        """
+        if self.device_data is None or (unique_id := self.unique_id) is None:
+            return None
+        return StatisticMetaData(
+            mean_type=StatisticMeanType.NONE,
+            has_sum=True,
+            name=self.name,
+            source=DOMAIN,
+            statistic_id=f"{DOMAIN}:{unique_id}".lower().replace("-", "_"),
+            unit_class="energy",
+            unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+        )
+
+    @callback
+    def refresh_hourly_statistic_metadata(self) -> bool:
+        """Queue a metadata-only Recorder import, preserving ALL hourly rows."""
+        if (metadata := self.hourly_statistic_metadata()) is None:
+            return False
+        async_add_external_statistics(self.hass, metadata, [])
+        return True
+
     async def _safe_write_hourly_statistics(self) -> None:
         try:
             await self._write_hourly_statistics()
@@ -1126,7 +1153,6 @@ class DataSensor(CoordinatorEntity, SensorEntity):
         running_state = 0.0
         current_day = None
         stats: list[StatisticData] = []
-        last_row: StatisticData | None = None
         for bucket in self.device_data.data:
             if bucket.value is None:
                 continue
@@ -1138,7 +1164,7 @@ class DataSensor(CoordinatorEntity, SensorEntity):
                 current_day = bucket_midnight
             running_sum += bucket.value
             running_state += bucket.value
-            last_row = StatisticData(
+            row = StatisticData(
                 start=bucket.start_date,
                 last_reset=bucket_midnight,
                 sum=running_sum,
@@ -1147,28 +1173,11 @@ class DataSensor(CoordinatorEntity, SensorEntity):
             existing_sum = existing_sums.get(bucket.start_date.timestamp())
             if existing_sum is not None and existing_sum == running_sum:
                 continue
-            stats.append(last_row)
-        if not stats and getattr(self, "_refresh_metadata_if_unchanged", False):
-            # A beta upgrade may have already published all hourly rows with
-            # the old, very long name. Republish only the identical final row
-            # once to update its metadata without altering totals/history.
-            if last_row is not None and existing_sums:
-                stats.append(last_row)
+            stats.append(row)
         if not stats:
             return
-        async_add_external_statistics(
-            self.hass,
-            StatisticMetaData(
-                mean_type=StatisticMeanType.NONE,
-                has_sum=True,
-                name=self.name,
-                source=DOMAIN,
-                statistic_id=statistic_id,
-                unit_class="energy",
-                unit_of_measurement=UnitOfEnergy.WATT_HOUR,
-            ),
-            stats,
-        )
+        if (metadata := self.hourly_statistic_metadata()) is not None:
+            async_add_external_statistics(self.hass, metadata, stats)
 
 
 class ControllerlessTodayEnergySensor(CoordinatorEntity, SensorEntity):
