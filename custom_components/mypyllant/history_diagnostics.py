@@ -139,7 +139,9 @@ class HistoricalReconciliation:
         self.entry_id = entry_id
         self.system = system
         self.stats_manager = stats_manager
-        self.store: Store[dict] = Store(hass, 1, f"mypyllant.history_diagnostics_{entry_id}")
+        self.store: Store[dict] = Store(
+            hass, 1, f"mypyllant.history_diagnostics_{entry_id}"
+        )
         self.zone = ZoneInfo(hass.config.time_zone or "Europe/Brussels")
         self.cache: dict[str, dict[str, list[str]]] = {}
         self.report_fetches: dict[str, str] = {}
