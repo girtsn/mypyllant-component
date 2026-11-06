@@ -164,8 +164,12 @@ async def test_fault_details_from_real_mypyllant_fixture_shape(hass):
     assert attrs["reported_fault_count"] == 2
     assert [x["code"] for x in attrs["reported_fault_codes"]] == ["3", "F.28"]
     assert attrs["reported_fault_codes"][0]["type"] == "MAINTENANCE"
-    assert attrs["reported_fault_codes"][0]["title"] == "Issues with your heating system"
-    assert attrs["reported_fault_codes"][0]["occurred_at"] == "2024-03-20T09:57:52+00:00"
+    assert (
+        attrs["reported_fault_codes"][0]["title"] == "Issues with your heating system"
+    )
+    assert (
+        attrs["reported_fault_codes"][0]["occurred_at"] == "2024-03-20T09:57:52+00:00"
+    )
     assert "SECRET-DEVICE-SERIAL" not in str(attrs)
     assert "SECRET-ARTICLE" not in str(attrs)
     assert "PRIVATE-ID" not in str(attrs)
