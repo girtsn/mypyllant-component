@@ -1,3 +1,11 @@
+# v0.9.28 — Home Assistant 2026.11 climate and water-heater API
+
+Updated every Vaillant room thermostat, Ambisense room, ventilation climate entity, and domestic hot water entity to provide native temperature units, readings and setpoints using the new Home Assistant `native_*` properties. This resolves climate and water-heater deprecation warnings (removal scheduled in Home Assistant 2027.11) without changing physical units, device commands, or entity IDs.
+
+- The existing climate tests now verify the native temperature properties.
+- Home Assistant 2026.11.0 or later is required for this release.
+- HACS users: update the integration and restart Home Assistant.
+
 # v0.9.27 — Show actual reported Vaillant fault codes
 
 Extends the v0.9.26 **Vaillant Reported Faults** diagnostic on the existing

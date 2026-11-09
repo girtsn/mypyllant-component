@@ -55,7 +55,7 @@ class VentilationClimate(CoordinatorEntity, ClimateEntity):
 
     coordinator: SystemCoordinator
     _attr_hvac_modes = list(VENTILATION_HVAC_MODE_MAP.keys())
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
 
     def __init__(
         self,

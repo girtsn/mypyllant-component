@@ -89,7 +89,7 @@ async def async_setup_entry(
 
 class DomesticHotWaterEntity(CoordinatorEntity, WaterHeaterEntity):
     coordinator: SystemCoordinator
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
 
     def __init__(self, system_index, dhw_index, coordinator, data) -> None:
         """Initialize entity."""
@@ -183,11 +183,11 @@ class DomesticHotWaterEntity(CoordinatorEntity, WaterHeaterEntity):
         )
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         return self.domestic_hot_water.tapping_setpoint
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         if isinstance(self.domestic_hot_water.current_dhw_temperature, float):
             return round(self.domestic_hot_water.current_dhw_temperature, 1)
         else:

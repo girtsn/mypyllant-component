@@ -1,7 +1,7 @@
 {
   "name": "Vaillant Boiler Monitor",
   "render_readme": true,
-  "homeassistant": "2026.3.0",
+  "homeassistant": "2026.11.0",
   "zip_release": true,
   "filename": "mypyllant-component.zip",
   "hide_default_branch": true

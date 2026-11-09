@@ -346,7 +346,7 @@ class ZoneClimate(CoordinatorEntity, ClimateEntity):
 
     coordinator: SystemCoordinator
     _attr_translation_key = "mypyllant_zone"
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_target_temperature_step = 0.5
     _enable_turn_on_off_backwards_compatibility = False
 
@@ -648,25 +648,25 @@ class ZoneClimate(CoordinatorEntity, ClimateEntity):
         )
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         return self.zone.desired_room_temperature_setpoint
 
     @property
-    def target_temperature_low(self) -> float | None:
+    def native_target_temperature_low(self) -> float | None:
         if self.supports_target_temperature_range:
             return self.zone.desired_room_temperature_setpoint_heating
         else:
             return None
 
     @property
-    def target_temperature_high(self) -> float | None:
+    def native_target_temperature_high(self) -> float | None:
         if self.supports_target_temperature_range:
             return self.zone.desired_room_temperature_setpoint_cooling
         else:
             return None
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         return self.zone.current_room_temperature
 
     @property
@@ -975,7 +975,7 @@ class AmbisenseClimate(AmbisenseCoordinatorEntity, ClimateEntity):
     """Climate for an ambisense room."""
 
     coordinator: SystemCoordinator
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = list(
         set([v for v in AMBISENSE_ROOM_OPERATION_MODE_MAP.values()])
     )
@@ -1080,11 +1080,11 @@ class AmbisenseClimate(AmbisenseCoordinatorEntity, ClimateEntity):
         )
 
     @property
-    def target_temperature(self) -> float | None:
+    def native_target_temperature(self) -> float | None:
         return self.room.room_configuration.temperature_setpoint
 
     @property
-    def current_temperature(self) -> float | None:
+    def native_current_temperature(self) -> float | None:
         return self.room.room_configuration.current_temperature
 
     @property
