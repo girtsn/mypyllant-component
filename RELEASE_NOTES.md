@@ -1,3 +1,9 @@
+# v0.9.29 — Remove deprecated Home Assistant connection-class API
+
+- Remove the obsolete `ConfigFlow.CONNECTION_CLASS` declaration that imported `CONN_CLASS_CLOUD_POLL` and triggered a Home Assistant 2026.11 startup warning (scheduled for removal in Home Assistant 2027.5).
+- Continue declaring `"iot_class": "cloud_polling"` in the integration manifest, as Home Assistant requires.
+- No changes to Vaillant login, cloud polling cadence, configuration entries, entity IDs, temperature handling, or other functionality.
+
 # v0.9.28 — Home Assistant 2026.11 climate and water-heater API
 
 Updated every Vaillant room thermostat, Ambisense room, ventilation climate entity, and domestic hot water entity to provide native temperature units, readings and setpoints using the new Home Assistant `native_*` properties. This resolves climate and water-heater deprecation warnings (removal scheduled in Home Assistant 2027.11) without changing physical units, device commands, or entity IDs.
