@@ -37,7 +37,12 @@ jobs:
           print(f'Validated release {actual}')
           PY
       - name: Check formatting and lint
-        run: uv run prek --all-files --skip pytest
+        run: |
+          uv run prek --all-files --skip pytest || {
+            git status --short
+            git diff -- custom_components tests
+            exit 1
+          }
       - name: Run tests
         run: uv run pytest
 
