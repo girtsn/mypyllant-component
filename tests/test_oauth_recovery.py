@@ -73,9 +73,7 @@ async def test_parallel_coordinators_refresh_only_once(hass):
 
     api.refresh_token.assert_awaited_once()
     api.login.assert_not_awaited()
-    assert (
-        hass.data[DOMAIN][entry.entry_id]["oauth_session_manager"].api is api
-    )
+    assert hass.data[DOMAIN][entry.entry_id]["oauth_session_manager"].api is api
 
 
 async def test_stale_token_triggers_one_fresh_login():
@@ -127,12 +125,8 @@ def test_authentication_classification_and_cloud_sensor_reason(hass):
     )
     assert is_invalid_grant(invalid)
     assert classify_api_error(invalid) == "authentication"
-    assert classify_api_error(_http_error(429, "Too Many Requests")) == (
-        "rate_limited"
-    )
-    assert classify_api_error(_http_error(403, "Forbidden")) == (
-        "forbidden_or_quota"
-    )
+    assert classify_api_error(_http_error(429, "Too Many Requests")) == "rate_limited"
+    assert classify_api_error(_http_error(403, "Forbidden")) == "forbidden_or_quota"
     assert classify_api_error(_http_error(500, "Server Error")) == "http_error"
     assert not is_invalid_grant(_http_error(400, "Malformed request"))
 
