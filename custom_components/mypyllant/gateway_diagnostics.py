@@ -11,6 +11,7 @@ import logging
 import re
 
 from aiohttp import ClientResponseError
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
@@ -125,6 +126,8 @@ class GatewayDiagnosticsCoordinator(DataUpdateCoordinator):
             # Reuse the existing Vaillant OAuth session and refresh policy.
             await self.system_coordinator._refresh_session()
             base = await self.system_coordinator.api.get_api_base()
+        except ConfigEntryAuthFailed:
+            raise
         except Exception as err:
             raise UpdateFailed("Unable to prepare Vaillant diagnostic request") from err
 

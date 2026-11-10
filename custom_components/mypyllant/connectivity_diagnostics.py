@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, timezone
 
-from aiohttp import ClientResponseError
+from .auth import classify_api_error
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
@@ -73,17 +73,14 @@ class CloudHealth:
     def failure_reason(self) -> str:
         if self.cloud_connected:
             return "none"
+        # Coordinators classify the actual failed request (including OAuth
+        # refreshes) rather than only quota-specific exceptions.
+        reason = getattr(self.system, "last_error_reason", None)
+        if reason and reason != "none":
+            return reason
         exc = getattr(self.system, "_quota_exc_info", None)
-        if isinstance(exc, ClientResponseError):
-            if exc.status == 429:
-                return "rate_limited"
-            if exc.status == 401:
-                return "authentication"
-            if exc.status == 403:
-                return "forbidden_or_quota"
-            return "http_error"
-        if isinstance(exc, (TimeoutError,)):
-            return "timeout"
+        if exc is not None:
+            return classify_api_error(exc)
         return "api_unavailable"
 
     @callback
