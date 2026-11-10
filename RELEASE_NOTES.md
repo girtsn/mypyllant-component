@@ -1,3 +1,13 @@
+# v0.9.30 — Recover rejected Vaillant OAuth sessions
+
+- Serialize OAuth refreshes across system, energy and VR 921 gateway diagnostics polling. Refresh-token rotation is now protected by one lock and token expiry is rechecked after acquiring it.
+- When Vaillant rejects a stale/revoked refresh token (`invalid_grant`), make a single synchronized fresh-login attempt. Trigger Home Assistant reauthentication if account credentials are rejected. Transient errors are not mislabeled as invalid credentials.
+- Classify the underlying failed API request in the Vaillant Cloud Connection State `failure_reason` attribute (including authentication), rather than misreporting every failed token refresh as `api_unavailable`.
+- Preserve physical gateway connectivity as a separate diagnostic, and retain all entity IDs, energy statistics IDs, cloud polling intervals, and read-only operation.
+- Add regression tests for concurrent refreshes, session recovery, failed login, and diagnostic categorization.
+
+Update via HACS and restart Home Assistant.
+
 # v0.9.29 — Remove deprecated Home Assistant connection-class API
 
 - Remove the obsolete `ConfigFlow.CONNECTION_CLASS` declaration that imported `CONN_CLASS_CLOUD_POLL` and triggered a Home Assistant 2026.11 startup warning (scheduled for removal in Home Assistant 2027.5).

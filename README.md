@@ -10,6 +10,15 @@ Read-only Home Assistant integration for a Vaillant ecoTEC boiler with a VR 921 
 
 The integration **does not** control heating, thermostats, domestic hot water, scheduling or the OpenTherm module. Use the Tado integration for those features. Unsupported Vaillant controller platforms and configuration options are not loaded for controllerless installations.
 
+## OAuth session recovery (v0.9.30)
+
+A shared lock prevents the system, hourly-energy and gateway-diagnostic polls
+from refreshing the same Vaillant OAuth token simultaneously. If Keycloak
+rejects a stale refresh token, the integration attempts a synchronized fresh
+login. A genuinely rejected account login triggers Home Assistant
+reauthentication. The cloud connection diagnostic reports authentication
+failures separately from gateway offline status.
+
 ## VR 921 cloud diagnostics (v0.9.26)
 
 In addition to the existing **Vaillant Cloud Connection State** and historical

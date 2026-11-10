@@ -11,6 +11,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .auth import VaillantSessionManager, classify_api_error
 from custom_components.mypyllant.const import (
     energy_profile_type,
     DOMAIN,
@@ -57,6 +58,7 @@ class MyPyllantCoordinator(DataUpdateCoordinator):
         update_interval: timedelta | None,
     ) -> None:
         self.api = api
+        self.last_error_reason = "none"
         self.hass = hass
         self.entry = entry
         self._quota_hit_time_key = f"quota_time_{self.__class__.__name__.lower()}"
@@ -132,22 +134,17 @@ class MyPyllantCoordinator(DataUpdateCoordinator):
         self._quota_exc_info = None
 
     async def _refresh_session(self):
-        if (
-            self.api.oauth_session_expires is None
-            or self.api.oauth_session_expires
-            < dt.now(timezone.utc) + timedelta(seconds=180)
-        ):
-            _LOGGER.debug("Refreshing token for %s", self.api.username)
-            await self.api.refresh_token()
-        else:
-            delta = self.api.oauth_session_expires - (
-                dt.now(timezone.utc) + timedelta(seconds=180)
-            )
-            _LOGGER.debug(
-                "Waiting %ss until token refresh for %s",
-                delta.seconds,
-                self.api.username,
-            )
+        # All coordinators share this API and its rotating OAuth refresh token.
+        # Create the manager synchronously before awaiting to avoid a race.
+        manager = self.hass_data.get("oauth_session_manager")
+        if manager is None:
+            manager = VaillantSessionManager(self.api)
+            self.hass_data["oauth_session_manager"] = manager
+        try:
+            await manager.refresh_if_needed()
+        except Exception as error:
+            self.last_error_reason = classify_api_error(error)
+            raise
 
     async def async_request_refresh_delayed(self, delay=None):
         """
@@ -171,6 +168,7 @@ class MyPyllantCoordinator(DataUpdateCoordinator):
 
         Sets a quota time, so the API isn't queried as often while it is down
         """
+        self.last_error_reason = classify_api_error(exc_info)
         self._quota_hit_time = dt.now(timezone.utc)
         self._quota_exc_info = exc_info
         raise UpdateFailed(
@@ -184,6 +182,7 @@ class MyPyllantCoordinator(DataUpdateCoordinator):
         Raises UpdateFailed if a quota error is detected
         """
         if is_quota_exceeded_exception(exc_info):
+            self.last_error_reason = classify_api_error(exc_info)
             duration = extract_quota_duration(exc_info)
             self._quota_hit_time = dt.now(timezone.utc)
             if duration:
@@ -321,6 +320,7 @@ class SystemCoordinator(MyPyllantCoordinator):
             ]
             # Clear quota state on successful fetch so future updates aren't blocked
             self._clear_quota_state()
+            self.last_error_reason = "none"
             return data
         except AmbisenseNoFacilityError as e:
             _LOGGER.warning(
@@ -330,6 +330,7 @@ class SystemCoordinator(MyPyllantCoordinator):
             )
             return []
         except ClientResponseError as e:
+            self.last_error_reason = classify_api_error(e)
             self._set_quota_and_raise(e)
             raise UpdateFailed(str(e)) from e
         except (CancelledError, TimeoutError) as e:
@@ -410,8 +411,10 @@ class DailyDataCoordinator(MyPyllantCoordinator):
                     data[system.id]["devices_data"].append(fetched)
             # Clear quota state on successful fetch so future updates aren't blocked
             self._clear_quota_state()
+            self.last_error_reason = "none"
             return data
         except ClientResponseError as e:
+            self.last_error_reason = classify_api_error(e)
             self._set_quota_and_raise(e)
             raise UpdateFailed(str(e)) from e
         except (CancelledError, TimeoutError) as e:
