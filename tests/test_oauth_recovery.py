@@ -83,8 +83,9 @@ async def test_stale_token_triggers_one_fresh_login():
         api.oauth_session_expires = _future()
 
     api.refresh_token.side_effect = _http_error(
-        400, 'Bad Request, response was: {"error":"invalid_grant",'
-        '"error_description":"Stale token"}'
+        400,
+        'Bad Request, response was: {"error":"invalid_grant",'
+        '"error_description":"Stale token"}',
     )
     api.login.side_effect = login
     manager = VaillantSessionManager(api)
