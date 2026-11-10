@@ -76,7 +76,14 @@ class CloudHealth:
         # Coordinators classify the actual failed request (including OAuth
         # refreshes) rather than only quota-specific exceptions.
         reason = getattr(self.system, "last_error_reason", None)
-        if reason and reason != "none":
+        if isinstance(reason, str) and reason in {
+            "authentication",
+            "rate_limited",
+            "timeout",
+            "forbidden_or_quota",
+            "http_error",
+            "api_unavailable",
+        }:
             return reason
         exc = getattr(self.system, "_quota_exc_info", None)
         if exc is not None:
